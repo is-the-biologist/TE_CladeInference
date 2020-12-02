@@ -13,6 +13,7 @@ What is necessary is that the allele copy number data for that haplotype inferen
 
 The haplotype inference tool is broken up into two parts: 1. A python script (haploTE.py) that will filter the allele copy number numpy data and output simplified CSVs with the copy number information. 2. An R script that takes in the copy number CSVs and outputs the haplotype calls. It is also necessary to have sample sheet file for your data set. This file is a two column tab seperated file where the first column is the ID of each individual in your dataset, and the second column is the name of their population of origin. This is necessary for computing population level summary statistics for both pre-processing data, and for the final output files.
 
-## 2) Pre-processing copy number numpy for haplotype inference:
+## 1) Processing copy number numpy for haplotype inference:
 
+First we must extract minor alleles from the copy number numpy file 
 
