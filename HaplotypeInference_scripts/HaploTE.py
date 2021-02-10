@@ -23,8 +23,8 @@ import sklearn.metrics as metrics
 from statsmodels.stats.multitest import multipletests
 from collections import Counter
 from functools import partial
-
-
+import pysam
+from matplotlib.cm import ScalarMappable
 
 class dataCollection:
     """
@@ -167,10 +167,11 @@ class summary_stats:
         self.strains = pd.read_csv(sample_sheet, header=None)
 
         pops = list(dict.fromkeys(self.strains[0]))
+
         self.pop_indexes = [list(np.where(self.strains[0].values == p)[0]) for p in pops] + [
             [i for i in range(self.strains.shape[0])]]
 
-    def calcPi(self, TE, indiv_strains=False, nan=False):
+    def calcPi(self, TE, indiv_strains=False, nan=False, save=True):
 
 
         # Load the numpy files
@@ -194,8 +195,10 @@ class summary_stats:
                 pop_SNPs = SNPs[p]
                 pi = self.pop_Pi(pop_SNPs, indiv_strains=indiv_strains, nan=nan)
                 pi_vector.append(pi)
-
-        np.save(os.path.join(self.pi, f"{TE}_pi.npy"), np.asarray(pi_vector))
+        if save:
+            np.save(os.path.join(self.pi, f"{TE}_pi.npy"), np.asarray(pi_vector))
+        else:
+            return np.asarray(pi_vector)
 
     def pop_Pi(self, pop_SNPs, min_CN=0.5, indiv_strains=False, nan=False):
         # Sum the CN per allele across all strains in the population
@@ -882,20 +885,20 @@ class subfamilyInference:
         AP_name = '{0}.AP.GDL.minor.csv'.format(TE)
         pd.DataFrame.to_csv(AP_df, path_or_buf=os.path.join(self.AP_df_path, AP_name), index=False)
 
-    def abline(self, slope, intercept, axs=None):
+    def abline(self, slope, intercept, axs=None, col="black"):
         """Plot a line from slope and intercept"""
 
         if axs == None:
             axes = plt.gca()
             x_vals = np.array(axes.get_xlim())
             y_vals = intercept + slope * x_vals
-            plt.plot(x_vals, y_vals, '--', color='black')
+            plt.plot(x_vals, y_vals, '--', color=col)
 
         else:
 
             x_vals = np.array(axs.get_xlim())
             y_vals = intercept + slope * x_vals
-            axs.plot(x_vals, y_vals, '--', color="black")
+            axs.plot(x_vals, y_vals, '--', color=col)
 
     def correlate_TE_fams(self, TE_1, TE_2, plot=True, minor=False, correlation_method='pearson'):
 
@@ -966,10 +969,6 @@ class subfamilyInference:
         Q3 = corr_matrix[TE_1_alleles: TE_1_alleles + TE_1_alleles, TE_1_alleles:TE_1_alleles + TE_2_alleles].flatten()
         # print('{0} is maximum correlation in SNPs of unrelated TEs'.format(max(Q2)))
 
-        # print(TE_1_df.values[np.where(Q2 >= .99)[0]])
-        norm_1 = sp.percentileofscore(Q1, 0.5, 'weak')
-        norm_2 = sp.percentileofscore(Q3, 0.5, 'weak')
-        null = sp.percentileofscore(Q2, 0.5, 'weak')
         if plot == True:
             legend = ['{0} vs {0}'.format(TE_1.split('.')[0]),
                       '{0} vs {1}'.format(TE_1.split('.')[0], TE_2.split('.')[0]),
@@ -1017,29 +1016,6 @@ class subfamilyInference:
                 plt.savefig(os.path.join(outputdir, 'corr_null.png'), dpi=300)
                 plt.close()
 
-    def constructNull_corr(self):
-        """
-
-        Function to construct a null and test distribution of SNP correlations.
-
-        :return:
-        """
-
-
-        null_distr = np.asarray([])
-        test_distr = np.asarray([])
-        for TE1 in self.active_tes:
-            for TE2 in self.active_tes:
-                pwTE = TE1 + '.CN.GDL.minor.csv'
-                if TE1 != TE2:
-                    quadrants = self.correlate_TE_fams('{0}.CN.GDL.minor.csv'.format(TE2), pwTE, plot=False, minor=False)
-                    null_distr = np.concatenate((null_distr, quadrants[1]))
-                else:
-                    quadrants = self.correlate_TE_fams('{0}.CN.GDL.minor.csv'.format(TE2), pwTE, plot=False, minor=False)
-                    test_distr = np.concatenate((test_distr, quadrants[0]))
-
-        return null_distr, test_distr
-
     def permuteSNPs(self, TE, permutations=1000, save=False, outlier=False):
         """
 
@@ -1077,38 +1053,30 @@ class subfamilyInference:
         else:
             return np_distr
 
-    def computePW_nulls(self, TE, save=True, correlation_method='pearson'):
+    def computePW_nulls(self, save=True, correlation_method='pearson'):
 
 
         null_wd = '/Users/iskander/Documents/Barbash_lab/TE_diversity_data/NULL_CORRELATIONS'
-        null_distr = np.asarray([])
-        test_distr = np.asarray([])
-        for TE1 in self.active_fullLength:
 
-            pwTE = TE1 + '.CN.GDL.minor.csv'
-            if TE1 != TE:
-                quadrants = self.correlate_TE_fams('{0}.CN.GDL.minor.csv'.format(TE), pwTE, plot=False, minor=False,
-                                                   correlation_method=correlation_method)
-                null_distr = np.concatenate((null_distr, quadrants[1]))
-            else:
-                quadrants = self.correlate_TE_fams('{0}.CN.GDL.minor.csv'.format(TE), pwTE, plot=False, minor=False,
-                                                   correlation_method=correlation_method)
-                test_distr = np.concatenate((test_distr, quadrants[0]))
-        corr_distrs = os.path.join(null_wd, TE+'.null_corr.npy')
+        completed_pw = []
 
-        np_distr = np.asarray([test_distr, null_distr])
-        if save:
-            np.save(corr_distrs, np_distr)
-        else:
-            return np_distr
+        for TE in self.active_fullLength:
+            for TE2 in self.active_fullLength:
+                pair = sorted([TE, TE2])
+                pwTE = TE2 + '.CN.GDL.minor.csv'
+                if pair not in completed_pw:
+                    quadrants = self.correlate_TE_fams('{0}.CN.GDL.minor.csv'.format(TE), pwTE, plot=False, minor=False,
+                                                       correlation_method=correlation_method)
+                    completed_pw.append(pair)
+                    #save individual numpys for each pairwise comparision
+                    if save:
+                        null = quadrants[1]
+                        np.save(os.path.join(null_wd, f"{'_vs_'.join(pair)}.null.npy"), null)
 
-    def calculatePvals(self, r, null):
+                else:
+                    pass
 
-        pval = (100 - sp.percentileofscore(null, r, 'weak')) / 100
-
-        return pval
-
-    def plot_pwTE_nulls(self, TE_distribs, TE_name, threads=1, crit=95, FDR = "bonf", saveplot=False, outdir='/Users/iskander/Documents/Barbash_lab/TE_diversity_data/NULL_CORRELATIONS/'):
+    def plot_pwTE_nulls(self, TE_distribs, TE_name, crit=95, FDR = "bonf", saveplot=False, outdir='/Users/iskander/Documents/Barbash_lab/TE_diversity_data/NULL_CORRELATIONS/'):
 
         #convert numpy to dataframe
         all_data = np.concatenate((TE_distribs[0], TE_distribs[1]))
@@ -1123,15 +1091,16 @@ class subfamilyInference:
             test_percentile = sp.percentileofscore(TE_distribs[0], crit_corr, 'weak')
 
         elif FDR == "BH": #use a BH correction to calculate the critical percentiles rather than the Bonferonni method
-            test_distr = np.asarray(sorted(TE_distribs[0], reverse=True))
-            #p = lambda r: (100 - sp.percentileofscore(TE_distribs[1], r, 'weak'))/100 #for each correlation value in test distribution we calculate its empirical P value in the null distribution
-            #emp_p = np.asarray(list(map(p, test_distr)))
 
-            pval_func = partial(self.calculatePvals, null=TE_distribs[1])
-            myPool = Pool(processes=threads)
-            emp_p = myPool.map(pval_func, test_distr)
+            #Method is probably not working correctly this should be re-evaluated
+            test_distr = np.asarray(sorted(TE_distribs[0], reverse=True))
+            null = np.asarray(sorted(TE_distribs[1], reverse=True))
+            emp_p = 1 - (sp.rankdata(null) / len(null))
+
             BH_correction = multipletests(pvals=emp_p, method="fdr_bh", alpha= (100-crit)/100, is_sorted=True )
-            crit_corr = min(test_distr[BH_correction[0] == True])
+
+
+            crit_corr = min(null[BH_correction[0] == True])
             test_percentile = sp.percentileofscore(test_distr, crit_corr, 'weak')
             crit = sp.percentileofscore(TE_distribs[1], crit_corr)
 
@@ -1167,7 +1136,7 @@ class subfamilyInference:
 
         return crit_corr
 
-    def Null_to_DF(self, subsample=1000):
+    def Null_to_DF(self, subsample=1000, extension="permut_null_corr"):
         """
         Construct the a data frame with all of the null distributions for our TEs
 
@@ -1177,7 +1146,7 @@ class subfamilyInference:
         data_labels = []
         distr_labels = []
         for TE in self.active_fullLength:
-            TE_distr = np.load('/Users/iskander/Documents/Barbash_lab/TE_diversity_data/NULL_CORRELATIONS/{0}.permut_null_corr.npy'.format(TE), allow_pickle=True)
+            TE_distr = np.load('/Users/iskander/Documents/Barbash_lab/TE_diversity_data/NULL_CORRELATIONS/{0}.{1}.npy'.format(TE, extension), allow_pickle=True)
             null = np.random.choice(a=TE_distr[1], size=subsample, replace=False)
             test = TE_distr[0]
             full_data = np.concatenate((full_data, null, test))
@@ -1359,71 +1328,61 @@ class haplotypeAnalysis:
                 plt.show()
                 plt.close()
 
-    def haplotypePCA(self, TE, filterHaplos=0):
+    def haplotypePCA(self, TE, decomp="PCA", ncol=2, fsize=15):
 
         cluster_file = os.path.join(self.haplo_path, "{0}_cluster_CN.tsv".format(TE))
         cluster_CN = pd.read_csv(cluster_file, sep='\t')
-        haplo_file = os.path.join(self.haplo_path, "{0}.haplotypeTable.tsv".format(TE))
-        haplotypeTable = pd.read_csv(haplo_file, sep='\t')
-        allele_CN = np.load(os.path.join(self.CN_path, TE+'_CN.npy'))
-
-        #We want to do PCA on the haplotype frequency within the population rather than copy number so that we can remove copy number as a component
-        cluster_list = self.filterHaplotypes(TE, minPopFreq=filterHaplos)
-        CN = np.full(fill_value=np.nan, shape=(85, len(cluster_list)))
-
-        i = 0
-
-        for s in cluster_list:
-
-            SNPs = haplotypeTable.loc[haplotypeTable['Cluster ID'] == s]['Alleles'].values[0]
-            alleles = [int(p.split('_')[1]) for p in SNPs.split(',')]
-            tot_haploCN = np.average(np.sum(allele_CN.T[alleles], axis=1), axis=0)
-            haploFreq = cluster_CN[s].values / tot_haploCN
-
-            CN[:,i] = haploFreq
-            i += 1
-
-        CN = np.nan_to_num(CN, 0)
+        CN = cluster_CN.values[:,2:].T
+        cluster_list = cluster_CN["SAMPLE_ID"]
+        cluster_names = cluster_CN.columns[2:]
 
         if CN.shape[1] >= 2:
-            pcs = PCA(n_components=min(3, CN.shape[1])).fit(CN)
-            EV = pcs.explained_variance_ratio_
 
-            # Pull out the alleles that explain the highest proportion of the variance of PC1
-            loading = pcs.components_
-            max_alleles = np.argsort(loading[0, :])[::-1][0:5]
-            cluster_headings = ','.join(cluster_list[max_alleles])
-            print(cluster_headings)
-            components = pcs.transform(CN)
-            pops = cluster_CN['POP'].values.reshape(85, 1)
+            if decomp == "PCA":
+                pcs = PCA(n_components=min(2, CN.shape[1])).fit(CN)
+                EV = pcs.explained_variance_ratio_
 
-            components = np.hstack((components, pops))
-            clustDF = pd.DataFrame(components, columns=['PC1', 'PC2', 'PC3', 'POPS'])
+                # Pull out the alleles that explain the highest proportion of the variance of PC1
+                loading = pcs.components_
+                max_alleles = np.argsort(loading[0, :])[::-1][0:5]
+                cluster_headings = ','.join(cluster_list[max_alleles])
 
-            with sns.axes_style('whitegrid'):
-                fig = plt.figure(figsize=(15,12))
-                axs = fig.subplots(3,1)
+                components = pcs.transform(CN)
+                #pops = cluster_CN['POP'].values.reshape(85, 1)
 
-                #PC1 v PC2
-                s1 = sns.scatterplot(data=clustDF, x='PC1', y='PC2', hue='POPS', ax=axs[0], s=75, edgecolor=None, legend='full', palette=self.color_map)
-                axs[0].set_xlabel('PC1 ({0:.2f}%)'.format(EV[0]*100), fontsize=20)
-                axs[0].set_ylabel('PC2 ({0:.2f}%)'.format(EV[1]*100), fontsize=20)
 
-                #PC1 v PC3
-                s2 = sns.scatterplot(data=clustDF, x='PC1', y='PC3', hue='POPS', ax=axs[1], s=75, edgecolor=None, legend=None, palette=self.color_map)
-                axs[1].set_xlabel('PC1 ({0:.2f}%)'.format(EV[0] * 100), fontsize=20)
-                axs[1].set_ylabel('PC3 ({0:.2f}%)'.format(EV[2] * 100), fontsize=20)
-                #PC2 v PC3
-                s3 = sns.scatterplot(data=clustDF, x='PC2', y='PC3', hue='POPS', ax=axs[2], s=75, edgecolor=None, legend=None, palette=self.color_map)
-                axs[2].set_xlabel('PC2 ({0:.2f}%)'.format(EV[2] * 100), fontsize=20)
-                axs[2].set_ylabel('PC3 ({0:.2f}%)'.format(EV[1] * 100), fontsize=20)
-                fig.tight_layout(rect=[0, 0.03, 1, 0.95])
+                clustDF = pd.DataFrame(components, columns=['PC1', 'PC2'])
+                clustDF["Haplotypes"] = cluster_names
+                cmap = plt.get_cmap('jet')
+                colors = cmap(np.linspace(0, 1.0, len(clustDF["Haplotypes"]) ))
+                with sns.axes_style('whitegrid'):
+                    fig = plt.figure(figsize=(12,8))
 
-                plt.suptitle(TE, fontsize=30, va='top')
-                plt.show()
-                plt.close()
+                    #PC1 v PC2
+                    s1 = sns.scatterplot(data=clustDF, x='PC1', y='PC2', hue="Haplotypes",  s=150, edgecolor="black", legend='full', palette=colors)
+                    plt.xlabel('PC1 ({0:.2f}%)'.format(EV[0]*100), fontsize=20)
+                    plt.ylabel('PC2 ({0:.2f}%)'.format(EV[1]*100), fontsize=20)
+                    plt.xticks(fontsize=15)
+                    plt.yticks(fontsize=15)
 
-            return cluster_headings.split(',')
+                    plt.legend(edgecolor="black", fontsize=fsize, title_fontsize=fsize, markerscale=2, ncol=ncol)
+
+            elif decomp == "tSNE":
+                components = TSNE().fit_transform(CN)
+
+                clustDF = pd.DataFrame(components, columns=['PC1', 'PC2'])
+                clustDF["Haplotypes"] = cluster_names
+
+                with sns.axes_style('whitegrid'):
+                    fig = plt.figure(figsize=(14, 8))
+
+                    # PC1 v PC2
+                    s1 = sns.scatterplot(data=clustDF, x='PC1', y='PC2', hue="Haplotypes", s=75, edgecolor=None,
+                                         legend='full')
+                    plt.xlabel('tSNE 1', fontsize=20)
+                    plt.ylabel('tSNE 2', fontsize=20)
+
+
 
         else:
             sys.stdout.write('Number of clusters called less than two in {0}\n'.format(TE))
@@ -1511,7 +1470,7 @@ class haplotypeAnalysis:
         elif Fst:
             pass
 
-    def calculateFst(self, TE, cluster):
+    def calculateFst(self, TE, cluster): #delete this funciton
 
         #calculate Fst for each population as measure of differentiation between entire GDL
         Pi = np.load(os.path.join(self.div_path, TE+"_pi.npy"))
@@ -1537,11 +1496,17 @@ class haplotypeAnalysis:
         KW_statistics.P = KW_statistics.P.astype(float)
         KW_statistics.H = KW_statistics.H.astype(float)
 
+        #compute effect size
+        KW_statistics["eta"] = ((KW_statistics["H"].values - 5 + 1) / (85 - 5)).astype(float)
+        bin = np.linspace(0, max(KW_statistics['eta']), 20)
+
+        KW_statistics['eta_bin'] = pd.cut(abs(KW_statistics['eta']), bin, precision=0)
+
         cleanNames = [self.TE_nameTable[N] for N in KW_statistics["TE"]]
         KW_statistics["TE"] = cleanNames
         mean_p = np.full(fill_value=np.nan, shape=(len(set(KW_statistics['TE'].values)), 2), dtype='object')
         i = 0
-        for data in KW_statistics.groupby('TE')['P']:  # order the groups of TEs from smallest to largest mean/median p val in the distribution
+        for data in KW_statistics.groupby('TE')['P']:  # order the groups of TEs from smallest to largest mean/median p val/eta in the distribution
             name = data[0]
             pval = np.median(data[1])
             mean_p[i, 0] = pval
@@ -1554,23 +1519,38 @@ class haplotypeAnalysis:
         with sns.axes_style('whitegrid'):
             fig = plt.figure(figsize=(15, 15), constrained_layout=False)
             axs = fig.subplots(2, 1, sharex=True, gridspec_kw={'height_ratios': [3, 1]})
-            sns.stripplot(data=KW_statistics, y='TE', x='P', s=3, alpha=0.8, edgecolor='black', jitter=0.2, color='black',
-                              order=order_TE, ax=axs[0])
-            sns.boxplot(data=KW_statistics, y='TE', x='P', saturation=0.5, order=order_TE, ax=axs[0], showfliers=False)
-            sns.distplot(a=KW_statistics['P'], ax=axs[1])
-            axs[0].axvline(bonferonni, linestyle='--', color='red')
+            cmap = plt.get_cmap("flare")
 
+            sns.stripplot(data=KW_statistics, y='TE', x='P', s=3, alpha=0.9, edgecolor='black', jitter=0.2,
+                              order=order_TE, ax=axs[0], dodge=False, linewidth=0, color="black")
+
+
+            sns.boxplot(data=KW_statistics, y='TE', x='P', saturation=0.5, order=order_TE, ax=axs[0], showfliers=False)
+
+            sns.distplot(a=KW_statistics['P'], ax=axs[1], kde=False)
+            axs[0].axvline(bonferonni, linestyle='--', color='red')
             axs[1].axvline(bonferonni, linestyle='--', color='red')
+
             axs[1].set_xticklabels(labels=axs[1].get_xticks(), fontsize=15)
             axs[0].set_xlabel('')
             axs[0].set_yticklabels(labels=axs[0].get_yticklabels(), fontsize=18)
             axs[0].set_ylabel('')
             axs[1].set_xlabel('-log2(p)', fontsize=25)
-            axs[1].set_ylabel('Density', fontsize=25)
-            yticks= ["{0:.2f}".format(y) for y in axs[1].get_yticks()]
+            axs[1].set_ylabel('Number of haplotypes', fontsize=25)
+            yticks= ["{0:.0f}".format(y) for y in axs[1].get_yticks()]
             xticks = ["{0:.2f}".format(x) for x in axs[1].get_xticks()]
             axs[1].set_yticklabels(labels=yticks, fontsize=15)
             axs[1].set_xticklabels(labels=xticks, fontsize=15)
+
+            #norm = plt.Normalize(0, KW_statistics['eta'].max())
+            #sm = ScalarMappable(norm=norm, cmap=cmap)
+            #sm.set_array([])
+            #cbar = fig.colorbar(sm, ax=axs[0])
+            #cbar.ax.set_title("Effect size")
+
+            # remove the legend created by seaborn
+            #axs[0].legend_.remove()
+
             #plt.suptitle('Kruskal-Wallis Test on Haplotype Copy Number', fontsize=25)
             fig.tight_layout()
             if saveplot:
@@ -1579,614 +1559,6 @@ class haplotypeAnalysis:
             else:
                 plt.show()
                 plt.close()
-
-    def haploCorr(self, TE, cluster, plot=False, popMean=True, totalCN=False, correlation="pearson"):
-        """
-
-        Compute the correlation for a single cluster and its major haplotype
-
-        :param TE:
-        :param cluster:
-        :return:
-        """
-        #Load in data
-
-        haplotype_file = os.path.join(self.haplo_path, TE+'.haplotypeTable.tsv')
-        hapTable = pd.read_csv(haplotype_file, sep='\t')
-        CN_file = os.path.join(self.CN_path, TE+'_CN.npy')
-        allele_CN = np.load(CN_file)
-
-        #Get the CN of the strains for this cluster
-        haploCN = np.asarray(hapTable.loc[hapTable['Cluster ID'] == cluster].values[:, 16:].reshape(85, ), dtype=float)
-
-        popFreq = hapTable.loc[hapTable['Cluster ID'] == cluster][["B FREQ", "I FREQ", "N FREQ", "T FREQ", "Z FREQ"]].values[0]
-
-        #extract the major allele CN
-        consensus = np.sum(allele_CN, axis=0)
-        Major = np.argmax(consensus, axis=0)
-        NTs = hapTable.loc[hapTable['Cluster ID'] == cluster]['Alleles'].values[0]
-        #total CN per position
-        CN_total = np.sum(allele_CN, axis=1)
-
-        NT, positions = zip(*[[self.NT_encode[nt.split('_')[0]], int(nt.split('_')[1])] for nt in NTs.split(',')])
-        positions = list(positions)
-        majAlleles = Major[positions]
-        major_CN = np.average(allele_CN.T[positions, majAlleles], axis=0)
-        pos_Total = np.average(CN_total.T[positions], axis=0)
-        indiv_total = np.average(CN_total, axis=1)
-
-        pop_major_CN = []
-        pop_haplo_CN = []
-        if popMean and not totalCN:
-            for p in self.pop_indexes:
-                pop_haplo_CN.append(np.average(haploCN[p]))
-                pop_major_CN.append(np.average(major_CN[p]))
-
-            haplo_df = pd.DataFrame(data={"Population": ['B', 'I', 'N', 'T', 'Z'], "Major haplotype": pop_major_CN,
-                                          "Variant haplotype": pop_haplo_CN})
-
-        elif totalCN: # check if minor allele CN is correlated with total CN -- could be stupid, but whatever
-
-            for p in self.pop_indexes:
-                pop_major_CN.append(np.average(indiv_total[p]))
-                pop_haplo_CN.append(np.average(haploCN[p]))
-            #pop_haplo_CN = popFreq
-            haplo_df = pd.DataFrame(data={"Population": ['B', 'I', 'N', 'T', 'Z'], "Major haplotype": pop_major_CN,
-                                          "Variant haplotype": pop_haplo_CN})
-        pop_major_CN = np.asarray(pop_major_CN)
-        pop_haplo_CN = np.asarray(pop_haplo_CN)
-
-        if correlation == "pearson":
-            r, p = sp.pearsonr(pop_major_CN, pop_haplo_CN)
-
-        elif correlation == "spearman":
-            r, p = sp.spearmanr(pop_major_CN, pop_haplo_CN)
-        else:
-            sys.exit("Incorrect correlation parameter. Try 'pearson', or 'spearman'.")
-
-        #Coerce into data frame so we can label points
-        #clustCN = pd.read_csv(os.path.join(self.haplo_path, "{0}_cluster_CN.tsv".format(TE)), sep='\t')
-        #sample_names = clustCN['POP']
-
-
-
-
-        if plot == True:
-            seqAnalysis = subfamilyInference()
-            with sns.axes_style('whitegrid'):
-                fig = plt.figure(figsize=(12,6))
-                g = sns.scatterplot(data=haplo_df, x='Major haplotype', y="Variant haplotype", hue='Population', palette=self.color_map, edgecolor=None, s=75)
-                x,y = seqAnalysis.get_axis_limits(g)
-                spacing = (max(haplo_df['Major haplotype']) - min(haplo_df['Major haplotype'])) * (1/8)
-                #plt.annotate('Correlation = {0:.2f}'.format(correlation[0,1]), xy=[x - spacing, y], fontsize=15)
-                plt.xlabel('Major haplotype mean copy number', fontsize=20)
-                plt.ylabel('Variant haplotype mean copy number', fontsize=20)
-                plt.show()
-                plt.close()
-
-
-        return r, p
-
-    def haploCompete(self, TE, pb_TE, plot=False):
-        """
-
-        Compute the correlation for a single cluster and its major haplotype
-
-        :param TE:
-        :param cluster:
-        :return:
-        """
-        #Load in data
-
-        haplotype_file = os.path.join(self.haplo_path, TE+'.haplotypeTable.tsv')
-        hapTable = pd.read_csv(haplotype_file, sep='\t')
-        CN_file = os.path.join(self.CN_path, TE+'_CN.npy')
-        allele_CN = np.load(CN_file)
-        validation_table = pd.read_csv("/Users/iskander/Documents/Barbash_lab/TE_diversity_data/PacBio/07-17-2020_validationScores.csv")
-        TE_haplo_CN = {"Major":[], "Minor":[], "ClusterQual":[]}
-        #Get the CN of the strains for this cluster
-
-        if hapTable.shape[0] > 1:
-            for cluster in hapTable["Cluster ID"]:
-                GDL_mean_minor = hapTable[hapTable["Cluster ID"] == cluster]["GDL MEAN CN"].values[0]
-
-                cluster_call = validation_table[ validation_table["TE"] == pb_TE ]["Cluster_ID"] == cluster
-                error_class = validation_table[validation_table["TE"] == pb_TE][cluster_call]["error_classification"]
-
-                if error_class.shape[0] > 0:#handle when things are not found
-
-                    error_class = error_class.values[0]
-
-                else:
-                    error_class = "n/a"
-
-                TE_haplo_CN["ClusterQual"].append(error_class)
-                TE_haplo_CN["Minor"].append(GDL_mean_minor)
-                #extract the major allele CN
-                consensus = np.sum(allele_CN, axis=0)
-                Major = np.argmax(consensus, axis=0)
-                NTs = hapTable.loc[hapTable['Cluster ID'] == cluster]['Alleles'].values[0]
-
-
-
-                NT, positions = zip(*[[self.NT_encode[nt.split('_')[0]], int(nt.split('_')[1])] for nt in NTs.split(',')])
-                positions = list(positions)
-                majAlleles = Major[positions]
-                major_CN = np.average(allele_CN.T[positions, majAlleles], axis=0)
-                GDL_mean_major = np.average(major_CN) #get GDL wide average copy number of the major haplotype
-                TE_haplo_CN["Major"].append(GDL_mean_major)
-
-
-            haplo_df = pd.DataFrame(TE_haplo_CN)
-            r = np.corrcoef(haplo_df["Major"], haplo_df["Minor"])[0,1]
-            if plot == True:
-                seqAnalysis = subfamilyInference()
-                colorMap = {"Full haplotype (Silhouette > 0; Freq. > 0 )":"#01BC01",
-                 "Multiple derived haplotypes (Silhouette > 0; Freq. = 0)": "#018D8D",
-                 "Incomplete haplotype (Silhouette <= 0; Freq. > 0)":"#EB6B02", "Error (Silhouette <= 0; Freq. = 0)":"#EB0202", "n/a":"lightgrey"}
-
-                with sns.axes_style('whitegrid'):
-                    fig = plt.figure(figsize=(12,6))
-                    g = sns.scatterplot(data=haplo_df, x='Major', y="Minor", hue="ClusterQual", s=75, palette=colorMap)
-                    plt.title(f"{TE}")
-                    x,y = seqAnalysis.get_axis_limits(g)
-                    spacing = (max(haplo_df['Major']) - min(haplo_df['Major'])) * (1/2)
-                    plt.annotate('r = {0:.2f}'.format(r), xy=[x - spacing, y], fontsize=15)
-                    plt.xlabel('Major haplotype mean copy number', fontsize=20)
-                    plt.ylabel('Variant haplotype mean copy number', fontsize=20)
-                    plt.show()
-                    plt.close()
-
-
-            return haplo_df
-
-    def write_Haplotype_correlations(self, run='CORR.RUN_1-27-20.csv', popMean=True, totalCN=False, correlation="pearson"):
-        """
-
-        Wrapper function that will iterate through my haplotype correlation functions to write out a data frame that
-        of the population mean copy numbers for all of the clusters for each TE. We precompute this and output it to a
-        data frame so that we don't have to recompute this every time we want to make a new plot.
-
-        :return:
-        """
-        all_corrs = []
-        clustIDs = []
-        TE_names = []
-        for TE in self.active_fullLength[0]:
-            corrs, IDs = self.correlateHaplotypes(TE, popMean, totalCN=totalCN, correlation=correlation)
-            all_corrs = all_corrs + corrs
-            clustIDs = clustIDs + list(IDs)
-            TE_names = TE_names + [TE for n in range(len(IDs))]
-
-        correlation_df = pd.DataFrame(data={'Correlation':all_corrs, 'Cluster ID':clustIDs, 'TE':TE_names})
-        correlation_df.to_csv(path_or_buf=os.path.join(self.haplo_stats_path, run), index=False)
-
-    def extractKW_correlations(self, KW_table, Corr_table, MAF=0):
-        """
-
-        This function is going to wrap the haploCorr functions such that we can get the we can subset for haplotypes that
-        that reject the KW test and those that fail to reject. This way we can look at differences in the distributions
-        of the correlations of the population mean copy number for all TEs
-
-        :return:
-        """
-
-        correlation_df = pd.read_csv(os.path.join(self.haplo_stats_path, Corr_table))
-        KW_df = pd.read_csv(os.path.join(self.haplo_stats_path, KW_table))
-        bonferonni = -np.log2(0.5/KW_df.shape[0])
-
-        diff_df = pd.DataFrame(data={'Correlation':[], 'TE':[], "H":[], "P":[]})
-        undiff_df = pd.DataFrame(data={'Correlation':[], 'TE':[], "H":[],"P":[]})
-        for TE in self.active_fullLength[0]:
-            #get clusters that pass MAF filtering:
-            cluster_list = set(self.filterHaplotypes(TE, minPopFreq=MAF))
-            if len(cluster_list) > 0:
-                #We extract the differentiated and undifferentiated clusters as defined by the KW test and a bonferonni corrected p
-                diff_clusters = list(set(KW_df.loc[KW_df['P'] >= bonferonni].loc[KW_df['TE'] == TE]['Cluster ID']).intersection(cluster_list)) #take clusters that pass freq cut off and P cut off
-                diff_correlations = correlation_df[correlation_df['Cluster ID'].isin(diff_clusters)].loc[correlation_df['TE'] == TE][['Correlation', 'TE']]
-                diff_KW_stat = KW_df[KW_df['Cluster ID'].isin(diff_clusters)].loc[KW_df['TE'] == TE][['H', "P"]]
-                diff_correlations = pd.concat([diff_correlations, diff_KW_stat], axis=1)
-
-                undiff_clusters = list(set(KW_df.loc[KW_df['P'] < bonferonni].loc[KW_df['TE'] == TE]['Cluster ID']).intersection(cluster_list))
-                undiff_correlations = correlation_df[correlation_df['Cluster ID'].isin(undiff_clusters)].loc[correlation_df['TE'] == TE][['Correlation', 'TE']]
-                undiff_KW_stat = KW_df[KW_df['Cluster ID'].isin(undiff_clusters)].loc[KW_df['TE'] == TE][['H', "P"]]
-                undiff_correlations = pd.concat([undiff_correlations, undiff_KW_stat], axis=1)
-
-                diff_df = diff_df.append(diff_correlations, ignore_index=True)
-                undiff_df = undiff_df.append(undiff_correlations, ignore_index=True)
-
-            else:
-                pass
-
-        #add categorical variables to data frame then append dataframes
-        diff_category = ['Differentiated' for d in range(diff_df.shape[0])]
-        undiff_category = ['Undifferentiated' for d in range(undiff_df.shape[0])]
-        diff_df['KW Test'] = diff_category
-        undiff_df['KW Test'] = undiff_category
-
-        KW_corr_DF = diff_df.append(undiff_df, ignore_index=True)
-
-
-        #Our data frame is now finally complete now return it and pass it to the plotting function:
-
-        return KW_corr_DF
-
-    def haplotypeCorrelation_plot_stats(self, KW_corr_df):
-
-        """
-        Wrap functions to generate statistcs for haplotype corr plot
-        :param KW_corr_df:
-        :return:
-        """
-
-        diff = KW_corr_df.loc[KW_corr_df['KW Test'] == 'Differentiated']['Correlation']
-        undiff = KW_corr_df.loc[KW_corr_df['KW Test'] == 'Undifferentiated']['Correlation']
-        mwu = sp.mannwhitneyu(diff, undiff, alternative="less")
-        f = self.computeEffectSize(a=diff, b=undiff) * 100
-        p_value = mwu[1]
-        pearsonr, pearson_p = sp.pearsonr(KW_corr_df["Correlation"], KW_corr_df["H"])
-
-        return p_value, f, pearsonr, pearson_p
-
-    def plot_haplotypeCorrelations(self, minFreq=0, KW_table='KW.RUN_1-27-20.csv', Corr_table='CORR.RUN_1-27-20.csv'):
-        """
-
-        Plotting function for the haplotype correlations
-
-        :return:
-        """
-
-        KW_corr_df = self.extractKW_correlations(MAF=minFreq, KW_table=KW_table, Corr_table=Corr_table)
-        mean_corr = np.full(fill_value=np.nan, shape=(len(set(KW_corr_df['TE'].values)), 2), dtype='object')
-
-        #statistics for correlations (MWU, effect size and pearsonr
-        p_value, f, pearsonr, p = self.haplotypeCorrelation_plot_stats(KW_corr_df)
-
-        #statistics for drawing line for linear regression plot
-        reg = LinearRegression().fit(KW_corr_df["H"].values.reshape(-1, 1), KW_corr_df["Correlation"].values.reshape(-1, 1))
-        inter = reg.intercept_[0]
-        corr = reg.coef_[0]
-
-        #iterate through allele frequency to look at changes in correlation between H and r statistic
-        statistic_matrix = np.full(fill_value=np.nan, shape=(7, 4))
-        row = 0
-        for AF in [0, .1, .2, .25, .3, .4, .5]:
-            temp_KW = self.extractKW_correlations(MAF=AF, KW_table=KW_table, Corr_table=Corr_table)
-            statistic_matrix[row,:] = self.haplotypeCorrelation_plot_stats(temp_KW)
-            row += 1
-        statistic_matrix = np.hstack((statistic_matrix, np.asarray([0, .1, .2, .25, .3, .4, .5]).reshape(7,1)))
-
-        AF_stats_df = pd.DataFrame(data=statistic_matrix, columns=["MWU P-value", "Effect Size", "Pearson R", "Pearson P-value", "Allele Frequency"])
-        #organize data for boxplots
-        i = 0
-        for data in KW_corr_df.groupby('TE'):  # lets order the box plots by the greatest difference between the Diff. and Undiff. correlation distributions
-            group = data[1]
-
-
-            name = data[0]
-
-            corr_difference = np.mean(group["Correlation"])
-
-            mean_corr[i, 0] = corr_difference
-            mean_corr[i, 1] = name
-            i += 1
-
-        order_TE = mean_corr[:, 1][np.argsort(mean_corr[:, 0])]
-
-        with sns.axes_style('whitegrid'):
-            fig = plt.figure(figsize=(16, 10), constrained_layout=True)
-            gs = fig.add_gridspec(nrows=2, ncols=3)
-            ax1 = fig.add_subplot(gs[0:2, 0])
-            ax2 = fig.add_subplot(gs[0, 1])
-            ax3 = fig.add_subplot(gs[0, 2])
-            ax4 = fig.add_subplot(gs[1, 1])
-            ax5 = fig.add_subplot(gs[1, 2])
-
-
-            #TE boxplots
-            sns.boxplot(data=KW_corr_df, x='Correlation', y='TE', order=order_TE, ax=ax1, color='lightgrey')
-            sns.stripplot(data=KW_corr_df, x='Correlation', y='TE', order=order_TE, hue='KW Test', ax=ax1, jitter=0.2,
-                          alpha=0.8, edgecolor=None)
-
-
-            ####
-            sns.boxplot(data=KW_corr_df, y='Correlation', x='KW Test', ax=ax2)
-            y, h, col = KW_corr_df['Correlation'].max() + .1, .1, 'k'
-            ax2.plot([0, 0, 1, 1], [y, y + h, y + h, y], lw=1.5, c=col)
-            ax2.text((1)*.5, y+h, f"p={p_value:0.3f}, f={f:0.2f}%", ha='center', va='bottom', color=col, fontsize=12.5)
-
-            ##### correlation between H and pearson R
-            sns.scatterplot(data=KW_corr_df, y="Correlation", x="H", hue="KW Test", edgecolor=None, alpha=0.8, ax=ax3)
-
-            #changes in correlations between H and pearson R across allele frequency:
-            sns.lineplot(data=AF_stats_df, y="Effect Size", x="Allele Frequency", ax=ax4, color='black', marker="o")
-            ###
-            sns.lineplot(data=AF_stats_df, y="Pearson R", x="Allele Frequency", ax=ax5, color='black', marker="o")
-
-            #labels and texts
-
-            #TE box plots
-            ax1.set_xlabel('Pearson r', fontsize=20)
-            ax1.set_ylabel('TE', fontsize=20)
-            xtick_labels = [-1.0, -0.5, 0.0, 0.5, 1.0]
-            ax1.set_xticks(xtick_labels)
-            ax1.set_xticklabels(labels=xtick_labels, fontsize=15, rotation=45)
-            ax1.set_yticklabels(labels=ax1.get_yticklabels(), fontsize=15)
-
-            #box plots
-            ax2.set_xlabel('')
-            ax2.set_ylabel('Pearson r', fontsize=20)
-            ax2.set_yticklabels(labels=ax2.get_yticks(), fontsize=15)
-            ax2.set_xticklabels(labels=ax2.get_xticklabels(), fontsize=20)
-
-            #scatter plot
-            ax3.set_xlabel('H', fontsize=20)
-            ax3.set_xticklabels(labels=ax3.get_xticks(), fontsize=15)
-            ax3.set_yticklabels(labels=ax3.get_yticks(), fontsize=15)
-            ax3.set_ylabel('Pearson r', fontsize=20)
-            seqAnalysis = subfamilyInference()
-            seqAnalysis.abline(slope=corr, intercept=inter, axs=ax3)
-            ax3.set_title(f"r = {pearsonr:.02f}, p = {p:.04f}", fontsize=15)
-
-            #Effect size vs. allele frequency
-            ax4.set_xlabel("Population Frequency", fontsize=20)
-            ax4.set_ylabel("Effect Size %", fontsize=20)
-            ax4.set_xticklabels(labels=[f"{l:0.1f}" for l in ax4.get_xticks()], fontsize=20)
-            ax4.set_yticklabels(labels=[f"{l:0.0f}" for l in ax4.get_yticks()], fontsize=20)
-
-            #R vs. AF
-            ax5.set_xlabel("Population Frequency", fontsize=20)
-            ax5.set_ylabel("Pearson r (H vs. Pearson r)", fontsize=20)
-            ax5.set_xticklabels(labels=[f"{l:0.1f}" for l in ax5.get_xticks()], fontsize=20)
-            ax5.set_yticklabels(labels=[f"{l:0.2f}" for l in ax5.get_yticks()], fontsize=20)
-
-            plt.show()
-            plt.close()
-
-    def computeEffectSize(self, a, b):
-
-        #Calculate common language effect size of MWU
-        #Null hypothesis: a = || > b
-        #we compare every element in array_1 to every element in array_2 and ask whether element in a <  element in b
-        counts = {True:0, False:0}
-        for element in a:
-            for comparison in b:
-                counts[element < comparison] += 1
-
-        f = counts[True]/(counts[True]+counts[False])
-
-        return f
-
-    def filterHaplotypes(self, TE, minPopFreq=0.1):
-
-        """
-        Iterate through all of the clusters called for a TE and return only the haplotypes that passs a criterion. This
-        criterion being that the haplotype must be at a minimum population frequency.
-
-        :param AP:
-        :return:
-        """
-        haplotypeTable = pd.read_csv(os.path.join(self.haplo_path, TE+'.haplotypeTable.tsv'), sep='\t')
-
-
-        popFreq = haplotypeTable[["GDL FREQ", "B FREQ", "I FREQ", "N FREQ", "T FREQ", "Z FREQ"]].values
-        passed_Clusters = haplotypeTable["Cluster ID"].values[np.where(np.sum(popFreq >= minPopFreq, axis=1) > 0)] #min pop freq pass
-
-
-
-        return passed_Clusters
-
-    def post_hocTests(self, TE, cluster, alpha=0.05):
-
-        #function to calculate results of PostHoc dunns Tests on clusters that reject our KW test
-
-        clusterTable = pd.read_csv(os.path.join(self.haplo_path, f"{TE}_cluster_CN.tsv"), sep="\t")
-        CN_groups = []
-        for pop in clusterTable.groupby("POP"):
-            CN_groups.append(pop[1][cluster].values)
-        dunns_scores = abs(posthoc_dunn(CN_groups))
-        #print(dunns_scores)
-        #print(dunns_scores <= alpha)
-        group_tests = []
-        for p in range(5): #perform a test of POP compared to GDL - POP
-            subgroup = CN_groups[p]
-            group = np.concatenate([CN_groups[s] for s in range(5) if s != p])
-
-            ds_group = -np.log2(posthoc_dunn([subgroup, group]).values[0,1])
-            group_tests.append(ds_group)
-
-        return group_tests
-
-    def tabulate_PostHoc_tests(self):
-
-        #iterate through all post hoc tests for only clusters that passed our bonferonni corrected KW tests
-        KW = pd.read_csv("/Users/iskander/Documents/Barbash_lab/TE_diversity_data/HAPLOTYPE_CLUSTERS/STATS/KW.RUN_1-27-20.csv")
-        bonf = -np.log2(0.05 / KW.shape[0])
-        diff_clusters = KW[KW["P"].values >= bonf]
-        populations = ["B", "I", "N", "T", "Z"]
-
-        stats_matrix = {"TE":[],"-log2(P)":[], "Population":[], "Cluster ID":[]}
-
-        for TE in diff_clusters.groupby("TE"):
-            for cluster in TE[1]["Cluster ID"]:
-                p_values = self.post_hocTests(TE[0], cluster)
-                cluster_ids = [cluster for c in range(5)]
-                te_name = [TE[0] for t in range(5)]
-
-                #add to matrix
-                stats_matrix["TE"] = stats_matrix["TE"] + te_name
-                stats_matrix["-log2(P)"] = stats_matrix["-log2(P)"] + p_values
-                stats_matrix["Population"] = stats_matrix["Population"] + populations
-                stats_matrix["Cluster ID"] = stats_matrix["Cluster ID"] + cluster_ids
-
-        stats_df = pd.DataFrame(data=stats_matrix)
-
-        return stats_df
-
-    def plot_PostHoc_tests(self, stats_df):
-
-        #plotting function to visualize the results of our post hoc dunns test to compare subgroups to the group distribution
-
-        bonf = -np.log2(0.05 / stats_df.shape[0])
-        with sns.axes_style("whitegrid"):
-            fig = plt.figure(figsize=(14,12))
-            sns.stripplot(data=stats_df, x="-log2(P)", y='TE', hue="Population", palette=self.color_map, size=5, jitter=0.2, edgecolor=None)
-            sns.boxplot(data=stats_df, x="-log2(P)", y="TE", color="lightgrey", showfliers=False)
-            plt.axvline(bonf, color='red', linestyle='--')
-            plt.show()
-            plt.close()
-
-    def popDifferentiation(self, stats_df):
-        """
-
-        I want to find a way to visualize which populations are the ones that are differentiated in the clusters.
-        An interesting analysis might be to ask if in a given TE or over all TE there is proclivity for a population to
-        have more differentiated clusters.
-
-        :param stats_df:
-        :return:
-        """
-        TE_num = len(set(stats_df["TE"]))
-
-        contingency_table = np.full(fill_value=np.nan, shape=(TE_num, 7), dtype="object")
-
-        crit_value = -np.log2(0.05/stats_df.shape[0])
-        cindex = 0
-        for TE in stats_df.groupby("TE"):
-            pop_contigency = np.zeros(shape=(5))
-            num_clusters = 0
-            for cluster in TE[1].groupby("Cluster ID"):
-                pass_crit = cluster[1]["-log2(P)"] >= crit_value
-                pop_contigency = pop_contigency + pass_crit.values
-                num_clusters += 1
-            #pop_contigency = pop_contigency / num_clusters
-            contingency_table[cindex,0:5] = pop_contigency
-            contingency_table[cindex, 5] = num_clusters
-            contingency_table[cindex, 6] = TE[0]
-            cindex += 1
-        return contingency_table
-
-    def read_embl(self, TE):
-
-        """
-        Simply read in the ORF, protein and DNA sequence from our EMBL file
-        """
-
-        embl_file = os.path.join(self.embl, TE+".embl")
-        CDS_location = []
-        AAseq = []
-        DNAseq = None
-        with open(embl_file, 'r') as myEMBL:
-            for record in SeqIO.parse(myEMBL, 'embl'):
-                DNAseq = record.seq
-                for feature in record.features:
-                    if feature.type == 'CDS':
-                        AAseq.append(feature.qualifiers['translation'][0])  # get the translation
-
-                        CDS_location.append(feature.location)
-
-            myEMBL.close()
-
-        return CDS_location, AAseq, DNAseq
-
-    def protein_polymorphism(self, SNP, ORF, protein, DNA, silent=False):
-
-
-        allele = SNP.split('_')[0]
-        position = int(SNP.split('_')[1])
-        reading_frame = False
-        orf_num = 0
-        for CDS in ORF:
-            if position >= CDS.start and position <= CDS.end:
-                reading_frame = orf_num
-            else:
-                pass
-            orf_num += 1
-
-        if reading_frame is not False:
-
-            newSeq = list(DNA)
-            newSeq[position - 1] = allele  # correct for the indexing
-            newSeq = "".join(newSeq)
-
-            #print(newSeq)
-            newProtein = Seq.translate(ORF[reading_frame].extract(newSeq), to_stop=True) #examine this for more weird behavior as more tests are performed
-            nonsyn = False
-
-            for aa in range(len(newProtein)):
-
-                if protein[reading_frame][aa] != newProtein[aa]:  # a non-synonymous protein change
-                    oldAA = protein[reading_frame][aa]
-                    newAA = newProtein[aa]
-                    aa_position = aa + 1
-                    nonsyn = True
-
-                    break
-            if nonsyn == True:
-                if not silent:
-                    print('{5}_{4}: Non-syn\nORF:{0}\n{1}{2}->{3}{2}'.format(reading_frame + 1, oldAA, aa_position, newAA,
-                                                                           position, allele))
-                return "Non-Synonymous"
-            else:
-                if not silent:
-                    print('{0}_{1}:Syn'.format(allele, position))
-                return "Synonymous"
-        else:
-            if not silent:
-                print("Non-coding")
-            return "Non-Coding"
-
-    def haplotypeProteinPol(self, TE, embl_TE, silent=False, saveplot=False):
-
-        protStats = {"Synonymous": 0, "Non-Synonymous": 0, "Non-Coding": 0}
-
-        haplotypeTable = pd.read_csv(os.path.join(self.haplo_path, TE + '.haplotypeTable.tsv'), sep='\t')
-
-        CDS, prot, DNA = self.read_embl(embl_TE)
-
-        for clusters in range(haplotypeTable.shape[0]):
-            if not silent:
-                print(haplotypeTable["Cluster ID"][clusters])
-            alleles = haplotypeTable["Alleles"][clusters].split(",")
-            for NT in alleles:
-
-                if int(NT.split("_")[1]) <= len(DNA):
-                    prot_msg = self.protein_polymorphism(NT, CDS, prot, DNA, silent)
-
-                    #add to protStats
-                    protStats[prot_msg] += 1
-                else:
-                    if not silent:
-
-                        print("LTR")
-
-                    if "LTR" not in protStats.keys():
-                        protStats["LTR"] = 1
-                    else:
-                        protStats["LTR"] += 1
-
-        #collate data into dataframe and output a plot
-        prot_keys = sorted(protStats.keys())
-        protStat_df = pd.DataFrame(data={"Polymorphism": prot_keys, "Counts": [protStats[p_class] for p_class in prot_keys]})
-
-        with sns.axes_style("whitegrid"):
-            #colors = ["windows blue", "amber", "faded green", "dusty purple"]
-            fig = plt.figure(figsize=(6,4))
-            plt.title(f"{TE}", fontsize=15)
-            sns.barplot(data=protStat_df, x="Polymorphism", y="Counts", palette=sns.husl_palette(n_colors=protStat_df.shape[0], l=.5, s=1))
-            plt.xlabel("Polymorphism class", fontsize=15)
-            plt.ylabel("SNPs", fontsize=15)
-            plt.xticks(fontsize=12)
-            tics, labs = plt.yticks()
-            tics = [int(round(t)) for t in tics]
-            plt.yticks(ticks=tics, labels=tics)
-            if saveplot:
-                plt.savefig(os.path.join(self.haplo_path, "PLOTS", "{0}.protStats.png".format(TE)), dpi=300)
-                plt.close()
-            else:
-                plt.show()
-                plt.close()
-        return protStat_df
 
 class PacBio:
 
@@ -3081,253 +2453,7 @@ class simulateHaplotypes:
 
         return alleleCN
 
-    def simPacBio_corr(self, max_threads=1, AF=0.0):
-        """
-
-        Wraps the haplotype verification analysis functions used with the PacBio data to conform to the inferred haplotypes
-        from the simulated data.
-
-        :return:
-        """
-        myPB = PacBio(active_TE_path=self.dummy_path, full_length_path=self.dummy_path)
-        myPB.haplo_path = self.haplo_path
-        myPB.CN_df_Path = self.CN_df_Path
-        myPB.variant_path = self.variant_path
-
-        PacBio_correlations = []
-        haplotype_correlations = []
-        jaccard_coeff_vector = []
-        TE_IDs = []
-        cluster_size = []
-        elements = []
-        cluster_ids = []
-        snp_PacBio = []
-        snp_ShortRead = []
-        snp_Jaccard = []
-        true_positive_list = []
-
-        TE_indexes = [TE for TE in range(self.active_tes.shape[0])] #iterate through TEs but multiprocess iterating through clusters
-
-
-        myPool = Pool(processes=max_threads)
-        validation_statistics = myPool.map(self.calculate_simStats, TE_indexes)
-
-        for TE_PacBio_correlations, TE_haplotype_correlations, TE_jaccard_coeff_vector, TE_TE_IDs, TE_cluster_size, TE_elements, TE_cluster_ids, TE_snp_PB, TE_snp_SR, TE_snp_JS, true_positives in validation_statistics: #unwrap all of these values
-            #add them all to giant vector
-            PacBio_correlations = PacBio_correlations + TE_PacBio_correlations
-            haplotype_correlations = haplotype_correlations + TE_haplotype_correlations
-            jaccard_coeff_vector = jaccard_coeff_vector + TE_jaccard_coeff_vector
-            TE_IDs = TE_IDs + TE_TE_IDs
-            cluster_size = cluster_size + TE_cluster_size
-            elements = elements + TE_elements
-            cluster_ids = cluster_ids + TE_cluster_ids
-            snp_PacBio = snp_PacBio + TE_snp_PB
-            snp_ShortRead = snp_ShortRead + TE_snp_SR
-            snp_Jaccard = snp_Jaccard + TE_snp_JS
-            true_positive_list = true_positive_list + true_positives
-
-        assert len(TE_IDs) == len(PacBio_correlations)
-
-        PacBio_df = pd.DataFrame(data={'TE': TE_IDs, 'PacBio Correlations': PacBio_correlations,
-                                       'Short-read Correlations': haplotype_correlations,
-                                       "Jaccard Score": jaccard_coeff_vector, "PacBio Pairwise": snp_PacBio,
-                                       "Short-read Pairwise": snp_ShortRead, "Jaccard Score Pairwise": snp_Jaccard, "True Positives":true_positive_list,
-                                       "Cluster Size": cluster_size, "Elements": elements, "Cluster ID": cluster_ids})
-        return PacBio_df
-
-    def calculate_simStats(self, TE, name=False):
-
-        """
-
-        This function is going to wrap the functions that I use to calculate the correlations of PacBio, but constructed
-        so that I can multiprocess the functions and be more efficient with my processors.
-
-
-        Fix this to work with new output data (PW SNP correlations)
-
-        :param TE_names:
-        :return:
-        """
-        AF = 0 #hard set this parameter
-        myPB = PacBio(active_TE_path=self.dummy_path, full_length_path=self.dummy_path)
-        myPB.haplo_path = self.haplo_path
-        myPB.CN_df_Path = self.CN_df_Path
-        myPB.variant_path = self.variant_path
-
-        PacBio_correlations = []
-        haplotype_correlations = []
-        jaccard_coeff_vector = []
-        TE_IDs = []
-        cluster_size = []
-        elements = []
-        cluster_ids = []
-        snp_PacBio = []
-        snp_ShortRead = []
-        snp_Jaccard = []
-        true_positive_list = []
-
-        if not name: #this is stupid fix later
-            TE_pb = self.active_tes[0][TE]
-            TE_haplo = TE_pb + ".simulated"
-        else:
-            TE_pb = TE
-            TE_haplo = TE
-        haplotypeTable = pd.read_csv(os.path.join(self.haplo_path, f"{TE_haplo}.haplotypeTable.tsv"), sep='\t')
-
-        # iterate through clusters
-
-        # Make the function easy to multiprocess
-        cluster_input = [cluster for cluster in haplotypeTable['Cluster ID'] if cluster.split("_")[1] != "NULL"]
-
-        if len(cluster_input) > 0:
-            for cluster in cluster_input:
-                PB_corr, HT_corr, jaccard_coeffs, num_SNPs, num_elements, pw_PB_snps, pw_SR_snps, pw_jaccard, true_pos = myPB.PacBio_haplotype_corr(TE_pb=TE_pb, TE_haplo=TE_haplo, AF_filter=AF, cluster=cluster)
-
-                if num_SNPs < 2:  # sometimes our clusters are empty and we return nans when we call mean so we will skip these
-                    # This happens when there are only 0 frequency alleles found
-                    pass
-
-                else:  # only add values that are not NaNs
-                    jaccard_coeff_vector.append(jaccard_coeffs)
-                    PacBio_correlations.append(PB_corr)
-                    haplotype_correlations.append(HT_corr)
-                    TE_IDs.append(TE_pb)
-                    cluster_size.append(num_SNPs)
-                    elements.append(num_elements)
-                    cluster_ids.append(cluster)
-                    snp_PacBio.append(",".join(pw_PB_snps.astype(str)))  # each correlation/JS for each SNP is added to dataframe as one row for that cluster
-                    snp_ShortRead.append(",".join(pw_SR_snps.astype(str)))
-                    snp_Jaccard.append(",".join(pw_jaccard.astype(str)))
-                    true_positive_list.append(true_pos)
-
-        else:  # passs when no clusters are called
-            pass
-
-        sys.stdout.write(f"{TE_pb}\n")
-
-        return PacBio_correlations, haplotype_correlations, jaccard_coeff_vector, TE_IDs, cluster_size, elements, cluster_ids, snp_PacBio, snp_ShortRead, snp_Jaccard, true_positive_list
-
-    def simulateBranching(self, TE_consensus, divergence=0.05, E=0.01):
-        """
-
-        Given a TE consensus sequence we are going to generate a branch process wherein every split of the tree is a SNP
-        accumulating on the element. As an initial starting point we will not model recombination, gene conversion, or
-        fragmentation of elements. Back mutations can occur as that is the simplest model to run also. At the end of this
-        we will create a data structure that represents all the possible variant TEs that we could sample from in a population.
-        E parameter is the rate of extinction of each lineage.
-        :param TE_consensus:
-        :param divergence:
-        :return:
-        """
-
-
-        NT_to_int = {"A": 0, "T": 1, "C": 2, "G": 3}
-        with open(os.path.join(self.consensus_path, TE_consensus+".fa"), "r") as myFa:
-            for record in SeqIO.parse(myFa, 'fasta'):
-                consensus = [NT_to_int[S] for S in record.seq]
-            myFa.close()
-
-        S = len(consensus) * divergence #calculate the number of polymorphisms for div%
-
-        # This a special case geometric series which can be solved for N like so:
-        branch_levels = int(round(np.log2(S + 1) - 1)) + 1 #we add one to the end of the solution to represent that tree
-        #tiers are 1 indexed and not 0 indexed like the series
-
-
-        #Now we begin to actually perform the branching process:
-        #SNPs have equal probability of ocurring across the entire element:
-        tree = {0:consensus}
-        for tier in range(branch_levels): #iterate through branching process
-            temp_tree = {}
-            new_branches = 0
-            for nodes in sorted(tree.keys()): #iterate through nodes at every step
-
-                #Each branchpoint there is a probability E that the lineage goes extinct:
-                if np.random.binomial(n=1, p=E) == 0 or tier == 0:
-                    node_consensus = tree[nodes]
-                    mutant_seq = node_consensus.copy()
-                    SNP_pos = np.random.randint(low=0, high=len(node_consensus))
-                    possible_mutations = [NT for NT in range(4) if NT != node_consensus[SNP_pos]]#create list to contain possible mutations
-                    SNP_mut = np.random.choice(possible_mutations)
-                    mutant_seq[SNP_pos] = SNP_mut #create a new consensus sequence for the polymorphic sequence
-                    #add the new sequences to our a tree structure
-                    temp_tree[new_branches] = node_consensus
-                    temp_tree[new_branches+1] = mutant_seq
-                    new_branches += 2
-                else:
-                    pass
-            #at every step of this branching process we create a new set of branches retaining only the information for this level
-            #so we end up with a dictionary structure where each tip is a unique TE sequence
-            tree = temp_tree
-
-        return tree
-
-    def sampleTEs(self, tree, copy_number, strains=85, target_coverage=12.5, weights=False):
-        """
-
-        We now sample TEs from our tree for each individual in proportion to a copy number parameter. Initial implementation
-        will be to sample each TE node independently, and so there will be no population structure at first. As we continue
-        we might choose to create population structure on the tree.
-
-        :param tree:
-        :param copy_number:
-        :param strains:
-        :return:
-        """
-        trueCN = []
-        sample_sheet = {"Headers": np.asarray([]), "Strains": []}
-        validation_variants = np.asarray([], dtype=int)
-        AP_matrix = np.full(fill_value=np.nan, shape=(strains, 4, len(tree[0])+1))
-
-        haplotypes = sorted(list(tree.keys()))
-        for ind in range(strains):
-            sampled_CN = np.random.poisson(copy_number)
-            trueCN.append(sampled_CN)
-            TE_strain_matrix = np.full(fill_value=np.nan, shape=(sampled_CN, len(tree[0])))
-
-            if weights is False: #conditional for non-uniform distribution of TEs
-                TE_sampling = np.random.choice(a=haplotypes, size=sampled_CN, replace=True)
-            else:
-                TE_sampling = np.random.choice(a=haplotypes, size=sampled_CN, replace=True, p=weights)
-
-            rindex = 0
-            for TE in TE_sampling:
-                TE_strain_matrix[rindex,:] = tree[TE]
-                rindex += 1
-            #add the TE_strain matrix to the set of TEs to validate with after we infer haplotypes
-            if len(validation_variants) == 0:
-                validation_variants = TE_strain_matrix
-            else:
-                validation_variants = np.concatenate((validation_variants, TE_strain_matrix))
-
-            #create a sample sheet reference for all of the TE insertions in the simulated genomes
-            sample_sheet["Headers"] = np.concatenate((sample_sheet["Headers"], TE_sampling))
-            sample_sheet["Strains"] = sample_sheet["Strains"] + [ind for s in range(sampled_CN)]
-
-            #TEs have been sampled now we create the allele proportion matrices:
-            for SNP_col in range(TE_strain_matrix.shape[1]):
-                for NT in range(4):
-                    AP_matrix[ind, NT, SNP_col+1] = np.sum(TE_strain_matrix[:,SNP_col] == NT) / sampled_CN
-
-        AP_matrix[np.isnan(AP_matrix)] = 0 #sanitize sim data
-        #AP matrix is obtained for each strain we can now use poisson distribution to generate observed copy number
-        #b/c we are only simulating full length elements
-        trueCN = np.asarray(trueCN)
-        library_coverage = np.random.poisson(target_coverage, size=strains) #generate coverage
-        est_CN = np.random.poisson(library_coverage*trueCN) / library_coverage #generate obsv_CN as described in sim_alleleCN
-
-        alleleCN = np.full(fill_value=np.nan, shape=AP_matrix.shape)
-
-        #This process could be more stochastic in its generation
-        for strain in range(AP_matrix.shape[0]): #Get the allele CN per position given our library
-            strain_alleleCN = AP_matrix[strain] * est_CN[strain]
-            alleleCN[strain] = strain_alleleCN
-
-        sample_sheet = pd.DataFrame(data=sample_sheet)
-
-        return alleleCN, sample_sheet, validation_variants
-
-    def sampleTEs_from_Phylo(self, fasta, copy_number, strains=85, target_coverage=12.5, erorr_rate=0.001):
+    def sampleTEs_from_Phylo(self, fasta, copy_number, strains, target_coverage=12.5, erorr_rate=0.001):
 
         headers = []
         fasta_seqs = []
@@ -3348,6 +2474,7 @@ class simulateHaplotypes:
         AP_matrix = np.full(fill_value=np.nan, shape=(strains, 4, fasta_np.shape[1] + 1), dtype=float)
 
         TE_index = np.arange(start=0, stop=fasta_np.shape[0])
+
         reorder_val = np.asarray([])
 
         for S in range(strains):
@@ -3359,7 +2486,7 @@ class simulateHaplotypes:
                 reorder_val = np.concatenate((reorder_val, TEs))
             else:
                 reorder_val = TEs
-            TE_index = np.asarray(list(set(TE_index) - set(TEs)))
+            #TE_index = np.asarray(list(set(TE_index) - set(TEs)))
 
             TE_strain_matrix = fasta_np[TEs]
 
@@ -3406,14 +2533,10 @@ class simulateHaplotypes:
 
         return alleleCN, sample_sheet, validation_variants
 
-    def simulateTE_population(self, TE_name, copy_number, divergence=5, extinction=0.5, newDir="null", phylog="false"):
+    def simulateTE_population(self, TE_name, phylog, copy_number, strains=85, divergence=5, extinction=0.5, newDir="null"):
 
         #wrapper function to bring together the functions needed to simulate a population of TEs and output/save files
-        if phylog == "false":
-            TE_tree = self.simulateBranching(TE_name, divergence, extinction)
-            alleleCN, sample_sheet, full_length = self.sampleTEs(tree=TE_tree, copy_number=copy_number)
-        else:
-            alleleCN, sample_sheet, full_length = self.sampleTEs_from_Phylo(fasta=phylog, copy_number=copy_number)
+        alleleCN, sample_sheet, full_length = self.sampleTEs_from_Phylo(fasta=phylog, copy_number=copy_number, strains=strains)
 
         simName = f"{TE_name}"
 
@@ -3427,7 +2550,10 @@ class simulateHaplotypes:
             os.mkdir(simDir)
         except FileExistsError:
             pass
+
         strain_names = np.asarray(sample_sheet["Strains"]).reshape(len(sample_sheet["Strains"]), 1)
+        pop_sample_sheet = pd.DataFrame(data={0:["A" for a in range(strains)], 1:[f"A{i}" for i in range(strains)]})
+        pop_sample_sheet.to_csv(os.path.join(simDir, simName+"_sample_sheet.csv"), index=False, header=False)
         var_csv = np.hstack((full_length, strain_names))
         var_df = pd.DataFrame(data=var_csv, columns=[x+1 for x in range(full_length.shape[1])]+["Strains"])
         np.save(os.path.join(simDir, simName+"_CN.npy"), alleleCN)
@@ -3435,283 +2561,6 @@ class simulateHaplotypes:
         sample_sheet.to_csv(os.path.join(simDir, simName+".PacBio_samples.csv"), index=False)
         var_df.to_csv(os.path.join(simDir, simName + ".PacBio_variants.csv"), index=False)
 
-    def estimate_S(self, TE):
-        """
-
-        A function to estimate the number of segregating sites from the CN/SNP pileups from the conTExt output.
-        The idea is to just count the number of SNPs/alleles at every position and report that number so that we can
-        have an empirical estimate of the genetic diversity of a TE that can be used as a parameter for simulation.
-
-        :param TE:
-        :return:
-        """
-
-        #loaded in the allele CN data
-        CN = np.load(os.path.join(self.CN_path,  f'{TE}_CN.npy'))
-        CN[np.where(CN < 0.5)] = 0
-        CN_sum = np.sum(CN.T, axis=2) #add up all CN across every individual for each allele
-
-        alleles_per_site = np.sum(CN_sum > 0, axis=1) # 1 if there is more than one copy of an allele, 0 if not then sum those
-
-        S = np.sum(alleles_per_site > 1) #total number of polymorphisms segregating in this TE in the GDL lines
-
-        #divergence = S / (CN.shape[2] - 1) #number of polymorphisms/NT of sequence
-        return S
-    
-    def generateUniqueHaplotypes(self, n_haplos, avg_D, TE_name):
-        """
-
-        Function to generate a number of haplotypes that are unique and unrelated with each other. This is to simulate
-        completely divergent haplotypes with NO overlapping SNPs. This simplifies our clustering problem, and can be
-        a good way to validate our inference under very ideal conditions. We will generate n_haplos number of trees and
-        sample a single haplotype from each. We will collect each haplotype into a tree structure and then pass it to
-        simulateTEpopulation to create a population sampling from those 5 haplotypes.
-
-        :param n_haplos:
-        :param avg_D:
-        :param TE:
-        :return:
-        """
-        haplotype_tree = {}
-
-        NT_to_int = {"A": 0, "T": 1, "C": 2, "G": 3}
-        int_to_NT = {0: "A", 1: "T", 2: "C", 3: "G"}
-        haplotype_labels = []
-
-        with open(os.path.join(self.consensus_path, TE_name+".fa"), "r") as myFa:
-            for record in SeqIO.parse(myFa, 'fasta'):
-                consensus = [NT_to_int[S] for S in record.seq]
-            myFa.close()
-
-        for K in range(n_haplos):
-            D = np.random.poisson(avg_D*100) / 100 #generate divergence of each haplotype so they all have different number of SNPs
-            unique = 1
-            while unique > 0: #this will check to make sure each haplotype that we generate is actually unique
-                tree = self.simulateBranching(TE_consensus=TE_name, divergence=D)
-                haplotype = np.asarray(tree[np.random.choice(list(tree.keys()))])
-
-                SNPs = ~np.equal(consensus, haplotype) #get all SNPs from the consensus
-
-                if K > 0: #when we have more than one tree recorded
-                    temp_u = 0
-                    for hap_keys in haplotype_tree.keys():
-                        temp_u += np.sum(np.equal(haplotype_tree[hap_keys][SNPs], haplotype[SNPs])) #check to make sure the haplotypes are unique
-                    unique = temp_u
-                else:
-                    unique = 0
-
-            haplotype_tree[K] = haplotype
-            positions = np.asarray(np.where(SNPs)[0] + 1, dtype=str) #correct positions for 0 index
-            alleles = [int_to_NT[allele] for allele in haplotype[SNPs]] #extract alleles
-            cluster_labels = ",".join(["_".join(polymorphism) for polymorphism in zip(alleles, positions)]) #create cluster labels
-            haplotype_labels.append(cluster_labels)
-
-        #create cluster labels data frame:
-        labels_df = {"Cluster":[k for k in range(n_haplos)], "SNPs":haplotype_labels}
-        labels_df = pd.DataFrame(data=labels_df)
-        #create the allele CN data:
-        alleleCN, sample_sheet, full_length = self.sampleTEs(tree=haplotype_tree, copy_number=50)
-
-        simName = f"sim{TE_name}"
-
-        # create the new directory for the simulated data
-        simDir = os.path.join(self.PacBio_root, "Simulations", date.today().strftime("%m-%d-%Y"))
-        try:  # make new directory for simulated data
-            os.mkdir(simDir)
-        except FileExistsError:
-            pass
-
-        np.save(os.path.join(simDir, simName + "_CN.npy"), alleleCN)
-        np.save(os.path.join(simDir, simName + ".PacBio_variants.npy"), full_length)
-        sample_sheet.to_csv(os.path.join(simDir, simName + ".PacBio_samples.csv"), index=False)
-        labels_df.to_csv(os.path.join(simDir, simName + ".clusterLabels.csv"), index=False)
-
-    def generateDerivedHaplotypes(self, TE_name, D_1, D_2, D_shared, n_haplos=2, copy_number=50, dirName=False):
-
-        """
-
-        This function is for creating two haplotypes that are derived from each other. I will do this by simply taking
-        one variant haplotype and creating a duplicate haplotype w/ N SNPs different, or removed.
-
-        This is to test how the inference method behaves when there is a relationship structure in the data.
-
-        :param n_haplos:
-        :param TE_name:
-        :return:
-        """
-        NT_to_int = {"A": 0, "T": 1, "C": 2, "G": 3}
-        int_to_NT = {0: "A", 1: "T", 2: "C", 3: "G"}
-        haplotype_labels = []
-
-        with open(os.path.join(self.consensus_path, TE_name+".fa"), "r") as myFa:
-            for record in SeqIO.parse(myFa, 'fasta'):
-                consensus = np.asarray([NT_to_int[S] for S in record.seq])
-            myFa.close()
-        haplotype = consensus.copy()
-        #generate D random SNPs on the consensus sequence and make it our new haplotype
-        haplo_snps = np.random.choice(a=len(consensus), size=D_1, replace=False)
-        haplo_alleles = []
-        for posit in haplo_snps:
-            mutation = np.random.choice(a=[s for s in range(4) if s != haplotype[posit]], size=1, replace=True)[0]#get a mutated allele
-            haplo_alleles.append(mutation)
-        haplo_alleles = np.asarray(haplo_alleles)
-        haplotype[haplo_snps] = haplo_alleles
-
-        #Now create a derived haplotype with shared alleles with the new haplotype
-        derived_haplotype = consensus.copy()
-        uniq_SNPs = D_2 - D_shared
-        index = np.random.choice(a=len(haplo_snps), size=D_shared, replace=False)
-        derived_haplotype[haplo_snps[index]] = haplo_alleles[index] #set the shared SNPs for the derived haplotypes
-
-        deriv_snps = np.random.choice(a=[n for n in range(len(consensus)) if n not in haplo_snps[index]], size=uniq_SNPs)
-        deriv_alleles = []
-        for posit in deriv_snps: #get the mutant alleles for the derived haplotype
-            mutation = np.random.choice(a=[s for s in range(4) if s != derived_haplotype[posit]], size=1, replace=True)[0]
-            deriv_alleles.append(mutation)
-        deriv_alleles = np.asarray(deriv_alleles)
-        derived_haplotype[deriv_snps] = deriv_alleles
-
-        derived_tree = {0:haplotype, 1:derived_haplotype, 2:consensus} #add 2 derived haplotypes, and the consensus to tree
-
-        #create cluster label object for easy checking later
-        for key in range(n_haplos):
-            haplotype = derived_tree[key]
-            SNPs = ~np.equal(consensus, haplotype)  # get all SNPs from the consensus
-            positions = np.asarray(np.where(SNPs)[0] + 1, dtype=str)  # correct positions for 0 index
-            alleles = [int_to_NT[allele] for allele in haplotype[SNPs]]  # extract alleles
-            cluster_labels = ",".join(["_".join(polymorphism) for polymorphism in zip(alleles, positions)])  # create cluster labels
-            haplotype_labels.append(cluster_labels)
-        p_weights = [0.2, 0.2, 0.6] #we allow the two derived haplotypes to be sampled at a lower frequency than the consensus
-        #this is so that they are called as minor alleles and not major
-
-        alleleCN, sample_sheet, full_length = self.sampleTEs(tree=derived_tree, copy_number=copy_number, weights=p_weights)
-        simName = f"sim{TE_name}"
-
-        labels_df = {"Cluster":[k for k in range(n_haplos)], "SNPs":haplotype_labels}
-        labels_df = pd.DataFrame(data=labels_df)
-
-        # create the new directory for the simulated data
-        if dirName is False:
-            simDir = os.path.join(self.PacBio_root, "Simulations", date.today().strftime("%m-%d-%Y"))
-            try:  # make new directory for simulated data
-                os.mkdir(simDir)
-            except FileExistsError:
-                pass
-        else:
-            simDir = os.path.join(self.PacBio_root, "Simulations", dirName)
-            try:  # make new directory for simulated data
-                os.mkdir(simDir)
-            except FileExistsError:
-                pass
-        #save output files
-        labels_df.to_csv(os.path.join(simDir, simName + ".clusterLabels.csv"), index=False)
-        np.save(os.path.join(simDir, simName+"_CN.npy"), alleleCN)
-        np.save(os.path.join(simDir, simName + ".PacBio_variants.npy"), full_length)
-        sample_sheet.to_csv(os.path.join(simDir, simName+".PacBio_samples.csv"), index=False)
-
-    def compute_metric(self, TE, sim_run_labels, sim_run_predict):
-        """
-
-        Read in cluster calls from haplotypeTable, and the cluster labels and compute the ARI for that run.
-
-        :param TE:
-        :return:
-        """
-
-        haplotypeTable = pd.read_csv(os.path.join(self.haplo_root, f"HAPLOTYPE_CALL_SIM_{sim_run_predict}", f"{TE}.haplotypeTable.tsv"), sep='\t')
-        called_SNPs = haplotypeTable["Alleles"]
-        split_SNPs = [markers.split(',') for markers in called_SNPs.values]
-
-        #we now iterate through each of the SNPs
-        predict_SNPs, predict_labels = list(zip(*sorted([(s, clust) for clust in range(len(split_SNPs)) for s in split_SNPs[clust]], key=operator.itemgetter(0))))
-
-        #load in the true labels:
-        cluster_labels = pd.read_csv(os.path.join(self.PacBio_root, "Simulations", sim_run_labels, f"{TE}.clusterLabels.csv"))
-        SNPs = cluster_labels["SNPs"]
-        split_SNPs = [markers.split(',') for markers in SNPs.values]
-        true_SNPs, true_labels = list(zip(*sorted([(s, clust) for clust in range(len(split_SNPs)) for s in split_SNPs[clust]], key=operator.itemgetter(0))))
-
-        assert true_SNPs == predict_SNPs
-
-        score = metrics.cluster.fowlkes_mallows_score(labels_true=true_labels, labels_pred=predict_labels)
-
-        #score = metrics.cluster.adjusted_rand_score(predict_labels, true_labels)
-
-        return score
-
-    def clusterAcc(self, saveplot=False):
-
-        ARIs = []
-        for i in range(20):
-            d = (i + 1)
-
-            score = self.compute_metric(TE="simJockey", sim_run_predict=f"02-26-2020_{d}", sim_run_labels="02-26-2020")
-            ARIs.append(score)
-
-        d_cutoff = [1 - (i + 1) / 10 for i in range(20)]
-
-        with sns.axes_style("whitegrid"):
-            fig = plt.figure(figsize=(8,4))
-            sns.lineplot(y=ARIs, x=d_cutoff, marker="o", color='black')
-            plt.xlabel("Clustering Cutoff (r)", fontsize=14)
-            plt.ylabel("Clustering Accuracy (F-M Score)", fontsize=14)
-            plt.xticks(fontsize=12.5)
-            plt.yticks(fontsize=12.5)
-            plt.axvline(0.5, linestyle='--', color='red')
-            #plt.title("Clustering of simulated haplotypes", fontsize=15)
-            if not saveplot:
-                plt.show()
-                plt.close()
-            else:
-                plt.savefig(os.path.join("/Users/iskander/Documents/Barbash_lab/TE_diversity_data/ALLELE_PLOTS","simARI.png"), dpi=300)
-                plt.close()
-
-    def runDerivedHaplotype_Simulation(self, D1, D2, shared, simPath):
-        """
-
-        Run simulation of derived haplotypes through pipeline to produce data frames to call in hierarchical clustering.
-
-
-        :param D1:
-        :param D2:
-        :param shared:
-        :param simPath:
-        :return:
-        """
-        #run subprocess to generate the numpy data for two derived haplotypes
-        self.generateDerivedHaplotypes(TE_name="Jockey", D_shared=shared, D_1=D1, D_2=D2, dirName=simPath)
-
-        #generate paths for all of our output simulated data files
-        newPath="SIM_" + simPath
-        newDiv = os.path.join("/Users/iskander/Documents/Barbash_lab/TE_diversity_data/seq_diversity_numpys/", newPath)
-        CN_root = os.path.join("/Users/iskander/Documents/Barbash_lab/TE_diversity_data/CN_dataframes/", newPath)
-        CN_df_path = os.path.join("/Users/iskander/Documents/Barbash_lab/TE_diversity_data/CN_dataframes/", newPath, 'FULL')
-        AP_df_path = os.path.join('/Users/iskander/Documents/Barbash_lab/TE_diversity_data/AP_dataframes/', newPath)
-        outlier_path = os.path.join("/Users/iskander/Documents/Barbash_lab/TE_diversity_data/CN_dataframes/", newPath, 'NO_OUTLIERS')
-        all_new = [newDiv, CN_root, CN_df_path, outlier_path, AP_df_path]
-        seqAnalysis = subfamilyInference()
-        stats = summary_stats()
-
-        for p in all_new:
-            try:
-                os.mkdir(p)
-            except FileExistsError:
-                print(f"{p} already exists.")
-
-        full_simPath = os.path.join("/Users/iskander/Documents/Barbash_lab/TE_diversity_data/PacBio/Simulations/", simPath)
-        seqAnalysis.CN_df_path = CN_df_path
-        seqAnalysis.AP_df_path = AP_df_path
-        seqAnalysis.div_path = newDiv
-        seqAnalysis.CN_path = full_simPath
-        stats.path = full_simPath
-
-        #produce the allele data frames from the simulated data
-        inTE = "simJockey"
-        pi = stats.calcPi(inTE)
-        np.save(os.path.join(seqAnalysis.div_path, inTE + "_pi.npy"), pi)
-
-        sim_TE = "simJockey"
-        seqAnalysis.CNAP_extraction(pi_filter=0.1, minFreq=0.1, TE=sim_TE, min_strains=10)
 
 class piRNA:
 
@@ -3723,7 +2572,7 @@ class piRNA:
         self.CN_path = '/Users/iskander/Documents/Barbash_lab/TE_diversity_data/allele_CN/GDL_RUN-11-15-19'
         self.color_map = ['#6F0000', '#009191', '#6DB6FF', 'orange', '#490092']
         self.NT_encode = {'A': 0, 'T': 1, 'C': 2, 'G': 3}
-        self.div_path = '/Users/iskander/Documents/Barbash_lab/TE_diversity_data/seq_diversity_numpys/RUN_1-27-20'
+        self.div_path = 'TEST_DATA/Pi'
         self.pop_indexes = [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
                        [15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33],
                        [34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52],
@@ -3888,12 +2737,34 @@ class piRNA:
             for R in iterable:
 
                 SNPs = np.asarray([S for S in R.get_query_sequences(mark_matches=False)])
-
                 position = R.reference_pos + 1
                 name = R.reference_name
                 read_len = np.asarray([S.alignment.reference_length for S in R.pileups])
+
+                #compute a mapping quality for the alignments using Mike's method of percent ident.
+                MAPQ = []
+                for S in R.pileups:
+                    #convert alignment scores to ~ % identity by considering each -1 as a single mismatch -> not perfect but ok
+                    mi = {si[0]: 1 - ((S.alignment.reference_length + si[1]/2)/S.alignment.reference_length) for si in S.alignment.get_tags() if si[0] == "AS" or si[0] == "XS"}
+
+                    #when there are 2+ possible alignments:
+                    if len(mi.keys()) == 2:
+                        M = ( (mi["AS"] - mi["XS"])**2 ) / (1 - mi["XS"])
+                        if M > 0.05:
+                            MAPQ.append(True)
+                        else:
+                            MAPQ.append(False)
+
+                    else: #when there is only one alignment
+                        if mi["AS"] < 0.2: #alignment is less then 20% diverged
+                            MAPQ.append(True)
+                        else:
+                            MAPQ.append(False)
+
+
                 length_filter = (np.asarray(read_len >= minRL, int) + np.asarray(read_len <= maxRL, int)) == 2 #filter by read length such that we only use 21-30 NT long reads (avoid miRNAs/fragments)
-                passed_SNPs = SNPs[length_filter]
+                final_filter = (length_filter*1 + np.asarray(MAPQ, int) ) == 2
+                passed_SNPs = SNPs[final_filter]
 
                 try:
                     for snp in passed_SNPs:
@@ -4018,7 +2889,7 @@ class piRNA:
 
         return AF_matrix
 
-    def piRNA_correlation(self, TE, cluster, saveplot=False):
+    def piRNA_correlation(self, TE, cluster, saveplot=False, scale="linear", abline=True, pop=True):
 
         piRNA = np.load(os.path.join(self.pileup_dir, f"{TE}.normalized.stranded.pirna.npy"))
         haploTable = pd.read_csv(os.path.join(self.haplo_path, f"{TE}.haplotypeTable.tsv"), sep='\t')
@@ -4058,8 +2929,8 @@ class piRNA:
 
         piRNA_matrix = np.concatenate((sense_haplo, antisense_haplo))
 
-        sense_r, sense_p = sp.pearsonr(CN, sense_haplo)
-        antisense_r, antisense_p = sp.pearsonr(CN, antisense_haplo)
+        sense_r, sense_p = sp.spearmanr(CN, sense_haplo)
+        antisense_r, antisense_p = sp.spearmanr(CN, antisense_haplo)
 
         print(sense_r, sense_p)
         print(antisense_r, antisense_p)
@@ -4067,26 +2938,48 @@ class piRNA:
         piRNA_df = pd.DataFrame(data={"piRNA": piRNA_matrix, "CN": np.concatenate((CN, CN)),
                                       "Population": ["Beijing", "Beijing", "Ithaca", "Ithaca", "Netherlands", "Netherlands",
                                                      "Tasmania", "Tasmania", "Zimbabwe", "Zimbabwe", "Beijing", "Beijing", "Ithaca", "Ithaca", "Netherlands", "Netherlands",
-                                                     "Tasmania", "Tasmania", "Zimbabwe", "Zimbabwe"], "Stranded":stranded})
+                                                     "Tasmania", "Tasmania", "Zimbabwe", "Zimbabwe"], "Strand":stranded})
 
 
+        seqAnal = subfamilyInference()
         # make plot
         with sns.axes_style("whitegrid"):
-            #fig = plt.figure(figsize=(12, 8))
-
-            regplot = sns.lmplot(data=piRNA_df, x="piRNA", y="CN", scatter=True, size=5, aspect=2, ci=None, hue="Stranded", line_kws={"linestyle": "--"},
-                                 scatter_kws={"s":75}, legend_out=False, palette=["#FF0D00","#01B2C2"], hue_order=["+", "-"])
-            #scatplot = sns.scatterplot(data=piRNA_df, x="piRNA", y="CN", hue="Population", palette=self.color_map, hue_order=["Beijing", "Ithaca", "Netherlands", "Tasmania", "Zimbabwe"], edgecolor=None, s=100, style="Stranded", legend="brief")
+            fig = plt.figure(figsize=(14, 6))
+            pal = ["#FF0D00","#01B2C2"]
+            #regplot = sns.lmplot(data=piRNA_df, x="piRNA", y="CN", scatter=True, height=5, aspect=2, ci=None, hue="Stranded", line_kws={"linestyle": "--"},
+                                 #scatter_kws={"s":75}, legend_out=False, palette=["#FF0D00","#01B2C2"], hue_order=["+", "-"])
+            if pop == False:
+                scatplot = sns.scatterplot(data=piRNA_df, x="piRNA", y="CN", hue="Strand", palette=pal, hue_order=["+", "-"], edgecolor=None, s=75)
+            else:
+                scatplot = sns.scatterplot(data=piRNA_df, x="piRNA", y="CN", hue="Population", palette=self.color_map,
+                                           hue_order=["Beijing", "Ithaca", "Netherlands", "Tasmania", "Zimbabwe"], style="Strand", style_order=["+", "-"], markers=["P", "s"], edgecolor="black", s=150)
             plt.xlabel("piRNA read depth", size=20)
             plt.ylabel("Copy Number", size=20)
 
-            plt.legend(fontsize=15, markerscale=1.25, edgecolor="black", ncol=1, title_fontsize=15, title="Strand")
+            if abline:
+                j = 0
+                for g in piRNA_df.groupby("Strand"):
+                    reg = LinearRegression().fit(g[1]["piRNA"].values.reshape(-1, 1), g[1]["CN"].values.reshape(-1, 1))
+                    inter = reg.intercept_[0]
+                    corr = reg.coef_[0]
+                    seqAnal.abline(slope=corr, intercept=inter, col=pal[j])
+                    j += 1
+            #plt.yscale(value=scale)
+            plt.xscale(value=scale)
+            h, l = scatplot.get_legend_handles_labels()
+            if pop == True:
+                leg1 = scatplot.legend(h[0:6], l[0:6], fontsize=15, markerscale=2, edgecolor="black", ncol=1, title_fontsize=15, loc=(0.1, 0.615))
+                leg2 = scatplot.legend(h[7:9], l[7:9], fontsize=15, markerscale=2, edgecolor="black", ncol=1, title_fontsize=15, title="Strand", loc="upper left")
+                scatplot.add_artist(leg1)
+            else:
+                scatplot.legend(fontsize=15, markerscale=2, edgecolor='black', ncol=1, title_fontsize=15)
 
+            plt.tight_layout()
             plt.xticks(size=15)
             plt.yticks(size=15)
 
             if saveplot:
-                regplot.savefig(os.path.join(self.piRNA_path, "plots", f"{TE}.{cluster}.piRNA_corr.png"), dpi=300)
+                plt.savefig(os.path.join(self.piRNA_path, "plots", f"{TE}.{cluster}.piRNA_corr.png"), dpi=300, bbox_inches="tight")
                 plt.close()
             else:
                 plt.show()
@@ -4180,7 +3073,7 @@ class piRNA:
         plt.show()
         plt.close()
 
-    def piRNA_haplotype_plot(self, TE, cluster, saveplot=False, plot=True):
+    def piRNA_haplotype_plot(self, TE, cluster, saveplot=False, plot=True, scale="linear"):
         """
 
         Create a table with the sense and antisense reads for a given haplotype across all of the piRNA samples that we have.
@@ -4235,11 +3128,14 @@ class piRNA:
 
                 cmap = self.color_map + ["#ED0086", "#B400E0","#E5FD00", "#A6F900"]
                 sns.scatterplot(data=piRNA_df, x="+", y="-", hue="Population/strain", s=100, edgecolor="black", palette=cmap, hue_order=["Beijing", "Ithaca", "Netherlands","Tasmania", "Zimbabwe","Raleigh", "ISO-1", "Misy", "Paris"])
+
+                plt.yscale(value=scale)
+                plt.xscale(value=scale)
                 plt.xticks(fontsize=20)
                 plt.yticks(fontsize=20)
                 plt.xlabel("Sense piRNA read depth", fontsize=22.5)
                 plt.ylabel("Antisense piRNA read depth", fontsize=22.5)
-                plt.legend(fontsize=15, markerscale=1.5, edgecolor="black", ncol=1, title_fontsize=15)
+                plt.legend(fontsize=15, markerscale=1.5, edgecolor="black", ncol=2, title_fontsize=15)
 
                 if saveplot:
                     plt.savefig(os.path.join(self.piRNA_path, "plots", f"{TE}.{cluster}.piRNA_readDepth.png"), dpi=300)
@@ -4371,7 +3267,7 @@ class piRNA:
 
         return total_piRNA_data
 
-    def piRNA_diversity(self, TE, minreads=5):
+    def piRNA_diversity(self, TE, position=True):
         """
 
         Calculate the sequence diversity of piRNA reads and compare that to the diversity of the genomic TE sequences.
@@ -4394,18 +3290,13 @@ class piRNA:
         sense_pi = []
         antisense_pi = []
         for p in range(29):
-            sense_pi.append(sum_stats.pop_Pi(sense_reads[p], indiv_strains=True, min_CN=0))
-            antisense_pi.append(sum_stats.pop_Pi(antisense_reads[p], indiv_strains=True, min_CN=0))
+            sense_pi.append(sum_stats.pop_Pi(sense_reads[p], indiv_strains=True, min_CN=1))
+            antisense_pi.append(sum_stats.pop_Pi(antisense_reads[p], indiv_strains=True, min_CN=1))
 
         sense_pi = np.asarray(sense_pi)
         antisense_pi = np.asarray(antisense_pi)
-        CN_pi = sum_stats.calcPi(TE, indiv_strains=True, nan=False)
+        CN_pi = sum_stats.calcPi(TE, indiv_strains=True, nan=False, save=False)
 
-
-        #compute average sequence diversity across element
-        avg_sense_pi = [np.nanmean(arr) for arr in sense_pi[GDL_pirna]]
-        avg_antisense_pi = [np.nanmean(arr) for arr in antisense_pi[GDL_pirna]]
-        avg_CN_pi = np.nanmean(CN_pi[GDL_ngs,:], axis=1)
 
         #compute the average of the per nucleotide ratios of sequence diversity & linear model for each strain
         antisense_ratios = []
@@ -4418,12 +3309,17 @@ class piRNA:
         for strain in range(10):
             piRNA_strain = GDL_pirna[strain]
             GDL_strain = GDL_ngs[strain]
-            sense_positions = ( (np.sum(sense_reads[piRNA_strain], axis=0) > minreads)*1 + (CN_pi[GDL_strain,:] > 0)*1)*1 > 1 #get all positions that pass read filter and CN filter
-            antisense_positions = ( (np.sum(antisense_reads[piRNA_strain], axis=0) > minreads)*1 + (CN_pi[GDL_strain,:] > 0)*1)*1 > 1
+
+            sense_positions = (CN_pi[GDL_strain,:] > 0) #get all positions that have polymorphism
+            antisense_positions = (CN_pi[GDL_strain,:] > 0)
 
             #ratios of diversity
-            avg_sense_ratios = np.average( (sense_pi[piRNA_strain][sense_positions]) / (CN_pi[GDL_strain,:][sense_positions]))
-            avg_antisese_ratios = np.average( (antisense_pi[piRNA_strain][antisense_positions]) / (CN_pi[GDL_strain,:][antisense_positions]))
+            if position:
+                avg_sense_ratios = np.nanmean( np.divide(sense_pi[piRNA_strain][sense_positions],  CN_pi[GDL_strain,:][sense_positions]) )
+                avg_antisese_ratios = np.nanmean( np.divide(antisense_pi[piRNA_strain][antisense_positions], CN_pi[GDL_strain,:][antisense_positions]))
+            else:
+                avg_sense_ratios = np.nanmean(sense_pi[piRNA_strain]) / np.nanmean(CN_pi[GDL_strain, :])
+                avg_antisese_ratios = np.nanmean(antisense_pi[piRNA_strain][antisense_positions]) / np.nanmean(CN_pi[GDL_strain, :][antisense_positions])
 
             antisense_ratios.append(avg_antisese_ratios)
             sense_ratios.append(avg_sense_ratios)
@@ -4465,7 +3361,7 @@ class piRNA:
 
         return pi_data
 
-    def diversityData(self):
+    def diversityData(self, p=True):
 
         data = {"pi_ratio": [], "r-squared_pi": [],
                 "r-squared_depth": [],
@@ -4474,216 +3370,41 @@ class piRNA:
 
         for TE in self.active_fullLength[0]:
 
-            DF = self.piRNA_diversity(TE)
+            DF = self.piRNA_diversity(TE, p)
             pi_data = pd.concat((pi_data, DF), axis=0)
 
         return pi_data
 
-    def diversityPlot(self, pi_df):
+    def diversityPlot(self, pi_df, saveplot=False):
+        hapAnalysis = haplotypeAnalysis()
 
+        clean_TEs = [hapAnalysis.TE_nameTable[n] for n in pi_df["TE"]]
+        pi_df["TE"] = clean_TEs
         TE_arr = []
-        
-        for g in pi_df.groupby("TE"):
-            avg_ratio = np.nanmean(g[1]["pi_ratio"])
-            TE_arr.append([g[0], avg_ratio])
-        box_order = list(zip(*sorted(TE_arr, key=operator.itemgetter(1))))[0]
 
+        for group in self.active_fullLength.groupby(1):
+            names = [hapAnalysis.TE_nameTable[n] for n in sorted(list(set(group[1][0])))]
+            TE_arr = TE_arr + names
+        #for g in pi_df.groupby("TE"):
+        #    avg_ratio = np.nanmean(g[1]["pi_ratio"])
+        #    TE_arr.append([g[0], avg_ratio])
+        #box_order = list(zip(*sorted(TE_arr, key=operator.itemgetter(1))))[0]
 
         with sns.axes_style("whitegrid"):
             fig = plt.figure(figsize=(18, 6))
-            sns.boxplot(data=pi_df, x="TE", y="pi_ratio", hue="strand", hue_order=["+", "-"], order=box_order, palette=["#FF0D00","#01B2C2"])
-            plt.xticks(rotation=90, fontsize=15)
+            sns.boxplot(data=pi_df, x="TE", y="pi_ratio", hue="strand", hue_order=["+", "-"], order=TE_arr, palette=["#FF0D00","#01B2C2"], dodge=True)
+            plt.xticks(rotation=90, fontsize=20)
             plt.yticks(fontsize=15)
+            plt.axhline(1, linestyle="--", color="grey")
             plt.xlabel("")
-            plt.ylabel("\u03C0 ratio", fontsize=20)
+            plt.ylabel("piRNA diversity ratio", fontsize=20)
             plt.legend(fontsize=15, edgecolor="black", title="Strand", title_fontsize=15)
-            plt.show()
-            plt.close()
-
-class RNAseq:
-
-    def __init__(self, active_te_path='/Users/iskander/Documents/Barbash_lab/TE_diversity_data/ACTIVE_TES_internal.tsv', active_full_path='/Users/iskander/Documents/Barbash_lab/TE_diversity_data/ACTIVE_TES_full.tsv'):
-        self.active_tes = pd.read_csv(active_te_path, header=None)
-        self.haplo_path = '/Users/iskander/Documents/Barbash_lab/TE_diversity_data/HAPLOTYPE_CLUSTERS/HAPLOTYPE_CALL_07-17-2020'
-        self.haplo_stats_path = '/Users/iskander/Documents/Barbash_lab/TE_diversity_data/HAPLOTYPE_CLUSTERS/STATS/'
-        self.active_fullLength = pd.read_csv(active_full_path, header=None)
-        self.CN_path = '/Users/iskander/Documents/Barbash_lab/TE_diversity_data/allele_CN/GDL_RUN-11-15-19'
-        self.color_map = ['#6F0000', '#009191', '#6DB6FF', 'orange', '#490092']
-        self.NT_encode = {'A': 0, 'T': 1, 'C': 2, 'G': 3}
-        self.div_path = '/Users/iskander/Documents/Barbash_lab/TE_diversity_data/seq_diversity_numpys/RUN_1-27-20'
-        self.pop_indexes = [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
-                            [15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33],
-                            [34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52],
-                            [53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70],
-                            [71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84]]
-        self.bam_dir = "/Users/iskander/Documents/Barbash_lab/TE_diversity_data/RNA-seq/"
-        self.consensus_path = '/Users/iskander/Documents/Barbash_lab/TE_diversity_data/TE_consensus'
-        self.pileup_dir = "/Users/iskander/Documents/Barbash_lab/TE_diversity_data/RNA-seq/pileups"
-        self.color_map = ['#6F0000', '#009191', '#6DB6FF', 'orange', '#490092']
-        self.plots = "/Users/iskander/Documents/Barbash_lab/TE_diversity_data/RNA-seq/plots"
-
-    def RNA_pileups(self, BAM, TE, matrix_size, Q=30):
-
-        """
-
-        Get the RNA read depth at each allele
-
-        :return:
-        """
-
-        bam_file = os.path.join(self.bam_dir, BAM)
-
-        samfile = pysam.AlignmentFile(bam_file, "rb")
-        all_headers = [seq["SN"] for seq in samfile.header["SQ"]]
-
-        #stranded_NT = {'A': 0, 'T': 1, 'C': 2, 'G': 3, "a":4, "t":5, "c":6, "g":7}
-
-        if TE in all_headers: #handle when reference sequence is missing from alignments
-            # Generate matrix to store read pileups:
-            pileup_matrix = np.full(fill_value=0, shape=(4, matrix_size + 1))#each position has 8 elements in the vector: A,T,C,G,a,t,c,g lower case letters represent antisense reads
-            iterable = samfile.pileup(TE, min_base_quality=Q)
-
-            for R in iterable:
-
-                passed_SNPs = np.asarray([S.upper() for S in R.get_query_sequences(mark_matches=False)])
-
-                position = R.reference_pos + 1
-                name = R.reference_name
-
-                try:
-                    for snp in passed_SNPs:
-                        if snp in self.NT_encode.keys(): #handle indels
-                            pileup_matrix[self.NT_encode[snp], position] += 1
-                except IndexError: #handle errors
-                        sys.stdout.write(f"Error: {TE} reference sequence length does not match BAM reference lengths\n")
-            samfile.close()
-        else:
-            # Generate matrix to store read pileups:
-            sys.stdout.write(f"Error: {TE} not found in BAM\n")
-            pileup_matrix = np.full(fill_value=np.nan, shape=(4, matrix_size + 1))
-
-        return pileup_matrix
-
-    def generatePileups(self, threads=1, samplesheet="/data/is372/TE_diversity_data/rnaseq.samplesheet.txt"):
-        """
-
-        Iterate through the list of all repeats from the consensus file and generate the read pileups for each library. Output
-        pileups as a 20x4xN matrix
-
-        :return:
-        """
-
-        BAM_list = pd.read_csv(samplesheet, header=None)[0].values
-        fasta = os.path.join(self.consensus_path, "repbase_19.06_DM_plus_tandems_2018-8-6.fa")
-        with open(fasta, "r") as consensusRefs:
-            for record in SeqIO.parse(consensusRefs, "fasta"):
-                name = record.name
-                seqlen = len(record.seq)
-
-                #use multithreading
-                pileup_gen = partial(self.RNA_pileups, TE=name, matrix_size=seqlen)
-                pileupJobs = Pool(processes=threads)
-                pileups = np.asarray(pileupJobs.map(pileup_gen, BAM_list))
-                pileupJobs.close()
-                #save output from file:
-                np.save(os.path.join(self.pileup_dir, f"{name}.mrna.npy"), pileups)
-
-    def haplotype_RNA(self, TE, cluster, saveplot=False):
-        """
-
-        get correlation between RNA reads and haplotype CN for the GDL lines we have RNAseq data from.
-
-        :param TE:
-        :param cluster:
-        :return:
-        """
-
-        #indices for matching up samples from the two datasets:
-        #NGS_index = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 16, 17, 19, 20, 21, 22, 23, 24, 25, 26, 27, 30, 31, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 84]
-        #RNA_index = [0, 1, 2, 3, 4, 5, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 72, 74, 75, 76, 77, 79, 80, 81]
-        pops = [S[0] for S in
-                pd.read_csv("/Users/iskander/Documents/Barbash_lab/TE_diversity_data/RNA-seq/rnaseq.samplesheet.txt",
-                            header=None, sep='\t')[1]]
-        #get copy number data for the haplotype
-        haploTable = pd.read_csv(os.path.join(self.haplo_path, f"{TE}.haplotypeTable.tsv"), sep='\t')
-        alleles = haploTable[haploTable["Cluster ID"] == cluster]["Alleles"].values[0]
-        #CN = haploTable[haploTable["Cluster ID"] == cluster].values[:, 16::].T[NGS_index].reshape(len(RNA_index), )
-
-        # get RNA read depth data for the haplotype
-        mRNA_reads = np.load(os.path.join(self.pileup_dir, f"{TE}.normalized.mrna.npy"))
-        NT, position = zip(*[S.split("_") for S in alleles.split(',')])
-        position = [int(i) for i in position]
-        encoded_NTs = [self.NT_encode[n] for n in NT]
-
-        mRNA_matrix = np.full(fill_value=np.nan, shape=(len(pops), len(NT)))
-
-        # get the allele reads from the piRNA data
-        p = 0
-        for pos in mRNA_reads.T[position]:
-
-            mRNA_matrix[:, p] = pos[encoded_NTs[p]]
-            p += 1
-        avg_coverage = np.average(mRNA_matrix, axis=1)
-
-
-
-        mRNA_df = pd.DataFrame(data={"rna":avg_coverage,  "Population":pops})
-
-
-
-        #make plot
-        with sns.axes_style("whitegrid"):
-            fig = plt.figure(figsize=(12,8))
-
-            #sns.lmplot(data=mRNA_df, x="rna", y="CN", scatter=False, size=5, aspect=2, ci=95, line_kws={"linestyle":"--", "color":'black'})
-            #sns.scatterplot(data=mRNA_df, x="rna", y="CN", hue="Population", palette=self.color_map, hue_order=["B", "I", "N", "T", "Z"], edgecolor=None, s=30)
-            sns.boxplot(data=mRNA_df, x="Population", y="rna", palette=self.color_map, hue_order=["B", "I", "N", "T", "Z"])
-            plt.xlabel("Population", size=22.5)
-            plt.ylabel("Normalized mRNA read depth", size=22.5)
-            #plt.title(f"{cluster}")
-            plt.xticks(ticks=[0,1,2,3,4], labels=["Beijing", "Ithaca", "Netherlands", "Tasmania", "Zimbabwe"], size=20)
-            plt.yticks(size=20)
-            plt.xlabel("")
-
-            if not saveplot:
-                plt.show()
+            plt.tight_layout()
+            if saveplot:
+                plt.savefig(os.path.join(self.pirna_plotDir, "pi_diversity.png"), dpi=300)
                 plt.close()
             else:
-                plt.savefig(os.path.join(self.plots, f"{TE}_{cluster}.RNA.png"), dpi=300)
+                plt.show()
                 plt.close()
 
-    def pop_RNA(self, TE):
-
-        """
-
-        plot the average RNA read depth/expression for a given TE across all populations. This is just so I can see if
-        there are any effects of over all RNAseq read depth that could explain some of the patterns I see.
-
-        :param TE:
-        :return:
-        """
-
-
-        RNA = np.load(os.path.join(self.pileup_dir, f"{TE}.normalized.mrna.npy"))
-        pops = [S[0] for S in pd.read_csv("/Users/iskander/Documents/Barbash_lab/TE_diversity_data/RNA-seq/rnaseq.samplesheet.txt", header=None,sep='\t')[1]]
-
-        reads = np.average(np.sum(RNA, axis=1), axis=1)
-
-
-        RNA_df = pd.DataFrame(data={"reads":reads, "Population":pops})
-
-        with sns.axes_style("whitegrid"):
-            fig = plt.figure(figsize=(12, 8))
-
-            # sns.lmplot(data=mRNA_df, x="rna", y="CN", scatter=False, size=5, aspect=2, ci=95, line_kws={"linestyle":"--", "color":'black'})
-            # sns.scatterplot(data=mRNA_df, x="rna", y="CN", hue="Population", palette=self.color_map, hue_order=["B", "I", "N", "T", "Z"], edgecolor=None, s=30)
-            sns.boxplot(data=RNA_df, x="Population", y="reads", palette=self.color_map,
-                        hue_order=["B", "I", "N", "T", "Z"])
-            plt.xlabel("Population", size=20)
-            plt.ylabel("Normalized mRNA read depth", size=20)
-            #plt.title(f"{cluster}")
-            plt.xticks(size=15)
-            plt.yticks(size=15)
-            plt.show()
-            plt.close()
 
