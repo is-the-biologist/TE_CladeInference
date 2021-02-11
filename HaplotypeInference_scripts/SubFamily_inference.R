@@ -36,7 +36,7 @@ construct_linkage <- function(df, linkage, TE_name, names=FALSE, fontsize=8){
   
 }
 
-draw_heatmaps<-function(df, outlier_df, TE_name, dendrogram, names=FALSE, fontsize=10, sample="/Users/iskander/Documents/Barbash_lab/TE_diversity_data/GDL_sample_sheet.csv", color_pal=c('#6F0000','#009191','#6DB6FF','orange','#490092')) {
+draw_heatmaps<-function(df, outlier_df, TE_name, dendrogram, names=FALSE, fontsize=10, sample="/Users/iskander/Documents/Barbash_lab/TE_diversity_data/GDL_sample_sheet.csv", color_pal) {
   
   #This function will draw out the final heatmaps that use the dendrogram that we constructed in the get linkage function
   cmat <- cor(outlier_df) #get the correlation matrix
@@ -75,7 +75,8 @@ draw_heatmaps<-function(df, outlier_df, TE_name, dendrogram, names=FALSE, fontsi
                        main = TE_name,
                        show_rownames = FALSE,
                        show_colnames = FALSE,
-                       fontsize = fontsize
+                       fontsize = fontsize,
+                      silent = TRUE
   )
   
   #construct the correlation matrix and seriate it based on the linkage
@@ -90,8 +91,9 @@ draw_heatmaps<-function(df, outlier_df, TE_name, dendrogram, names=FALSE, fontsi
                 main = TE_name,
                 show_rownames = names,
                 show_colnames = FALSE,
-                fontsize = fontsize)
-  
+                fontsize = fontsize,
+                silent=TRUE
+  )
   return(list(pop_hmap, haplo_hmap))
 }
 
@@ -305,7 +307,9 @@ formatTable <- function(CN, clabels, stats_table, sample = '/Users/iskander/Docu
   
   clust_table <- matrix(nrow = dim(clabels)[1], ncol = total_cols)
   column_names <- c("Alleles" , colnames(stats_table), "Cluster Size", "Copy Number", as.character(CN$SAMPLE_ID))
+
   colnames(clust_table) <- column_names
+  
   
   
   #add alleles
@@ -362,7 +366,7 @@ read_TE_tables<-function(TE_file){
   return(output_DF)
 }
 
-extractHaplotypes <- function(TE_name, outlier=FALSE, outlier_dir, output_dir, linkage= 'average', minSize = T, dist_cutoff=0.5, hmap_labels=FALSE, dendro_labels=FALSE, plots=TRUE, 
+extractHaplotypes <- function(TE_name, outlier=FALSE, outlier_dir, output_dir, linkage= 'average', minSize = T, dist_cutoff=0.5, hmap_labels=FALSE, dendro_labels=FALSE, plots=TRUE, color_pal=c('#6F0000','#009191','#6DB6FF','orange','#490092'),
                               alleleCN_dir="/Users/iskander/Documents/Barbash_lab/TE_diversity_data/allele_CN/GDL_RUN-11-15-19", sample="/Users/iskander/Documents/Barbash_lab/TE_diversity_data/GDL_sample_sheet.csv"){
   #Function to wrap our analyses into one and then save all of the files into csvs, plots as needed
   TE_desig <- strsplit(basename(TE_name), '\\.')[[1]][1]
@@ -398,7 +402,7 @@ extractHaplotypes <- function(TE_name, outlier=FALSE, outlier_dir, output_dir, l
     
     dendrogram <- construct_linkage(allele_DF, linkage=linkage, TE_name = TE_desig, names = dendro_labels, fontsize = 7)
     
-    hmaps<-draw_heatmaps(df=allele_CN_DF, outlier_df = allele_DF, TE_name = TE_desig, dendrogram = dendrogram, names = hmap_labels, sample = sample)
+    hmaps<-draw_heatmaps(df=allele_CN_DF, outlier_df = allele_DF, TE_name = TE_desig, dendrogram = dendrogram, names = hmap_labels, sample = sample, color_pal = color_pal)
     
     plotting_dir <- file.path(output_dir,'PLOTS')
     
@@ -436,7 +440,7 @@ extractHaplotypes <- function(TE_name, outlier=FALSE, outlier_dir, output_dir, l
     haplo_Var <- haplo_list[[3]]
     
     stats <- getHaploclusterStats(haplo_CN, haplo_desig, TE_desig, CN_dir = alleleCN_dir, sample = sample)
-    cluster_table <- formatTable(haplo_CN, haplo_desig, stats)
+    cluster_table <- formatTable(haplo_CN, haplo_desig, stats, sample = sample)
   }
   
   #write out tables to path
@@ -449,84 +453,5 @@ extractHaplotypes <- function(TE_name, outlier=FALSE, outlier_dir, output_dir, l
   
 }
 
-#outside of the module to infer haplotypes we also have added in a function to create network graphs of the correlation distance between haplotype clusters
-#this function will not be called within the main wrapper script and must be called seperately
-clusterNetworks <- function(TE_name, dist_cutoff = 0.5, vertex_size=6, saveplot=FALSE,leg=TRUE, SNP_dir="/Users/iskander/Documents/Barbash_lab/TE_diversity_data/CN_dataframes/RUN_1-27-20/FULL/", haplotype_dir="/Users/iskander/Documents/Barbash_lab/TE_diversity_data/HAPLOTYPE_CLUSTERS/HAPLOTYPE_CALL_1-27-20/"){
-  
-  set.seed(420)
-  
-  SNP_table <- read.csv(paste0(SNP_dir,TE_name,".CN.GDL.minor.csv"))
-  #modify cluster labels so we can color our SNPs
-  haploTable<- read.csv(paste0(haplotype_dir,TE_name,".haplotypeTable.tsv"), sep='\t')
-  
-  SNP_labels <- c()
-  cluster_labels <- c()
-  
-  for (snp in 1:dim(haploTable)[1]){ #iterate through clusters and add them to a vector that contains cluster labels for each SNP
-    cluster_name <- as.character(haploTable$Cluster.ID[snp])
-    cluster_SNPs <- strsplit(as.character(haploTable$Alleles[snp]), ",")[[1]]
-    SNP_labels <- c(SNP_labels, cluster_SNPs)
-    for (clabel in 1:length(cluster_SNPs)){
-      cluster_labels <- c(cluster_labels, cluster_name)
-    }
-    
-  }
-  
-  
-  
-  #instead of putting unclsutered SNPs into graph let's just remove them:
-  SNP_table <-SNP_table[SNP_labels]
-  corr_SNP <- cor(SNP_table)
-  corr_SNP[corr_SNP < dist_cutoff] = 0
-  
-  cluster_info <- matrix(data = cluster_labels)
-  rownames(cluster_info) <- SNP_labels
-  colnames(cluster_info) <- c("Cluster_ID")
-  cluster_info <- as.data.frame(cluster_info)
-  
-  
-  
-  network <- graph_from_adjacency_matrix(corr_SNP, weighted = T, mode="undirected", diag=F)
-  
- 
-  
-  #data, network and labels have been generated now let's plot
-  
-  coul <- createPalette(nlevels(as.factor(cluster_info$Cluster_ID)), c("#2A95E8", "#E5629C"), range = c(10, 60), M = 100000)
-  # Map the color to cluster
-  my_color <- coul[as.numeric(as.factor(cluster_info$Cluster_ID))]
-  
-  
-  if (saveplot == FALSE){
-    
-  }
-  else{ 
-    path = "/Users/iskander/Documents/Barbash_lab/TE_diversity_data/CLUSTER_NETWORKS/"
-    plot_output <- file.path(path, paste0(TE_name, "_network.png"))
-    png(filename = plot_output, res=300, height = 4, width = 6, units = "in")
-  
-  }
-  
-  par(bg="white", mar=c(0,0,2,0))
-  graph<-plot(network,vertex.size=vertex_size,
-       vertex.color=my_color,
-       vertex.label = "",
-       vertex.label.cex=0.7,
-       vertex.label.color="black",
-       vertex.frame.color="black",
-       main = TE_name)
-  #grid(8, 12, lwd = .5, lty = "solid")
-  if (leg){
-  legend(x=1.1, y=0.8, 
-         legend=levels(as.factor(cluster_info$Cluster_ID)), 
-         col = coul , 
-         bty = "n", pch=20 , pt.cex = 2.2, cex = 1,
-         text.col="black" , horiz = F)
-  }
-  graph
-  #dev.off()
 
-  
-  
-}
 
