@@ -15,5 +15,5 @@ The haplotype inference tool is broken up into two parts: 1. A python script (ha
 
 ## 1) Processing copy number numpy for haplotype inference:
 
-First we must extract minor alleles from the copy number numpy file 
+First extract the minor alleles from the copy number numpy file by using the haploTE.py modules. 
 
