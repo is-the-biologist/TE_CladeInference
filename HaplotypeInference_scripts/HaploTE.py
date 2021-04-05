@@ -24,10 +24,12 @@ from statsmodels.stats.multitest import multipletests
 from collections import Counter
 from functools import partial
 import pysam
-from matplotlib.cm import ScalarMappable
+
 
 class dataCollection:
     """
+
+    This module might need to be removed before final commit.
 
     Simple class with methods to sftp data and to process allele CN from CN and SNP pileups.
 
@@ -632,8 +634,11 @@ class subfamilyInference:
         PCA_matrix = {"PC1":components[:,0], "PC2":components[:,1], "Population":populations}
 
         with sns.axes_style("whitegrid"):
-            plt.figure(figsize=(12, 6))
-            sns.scatterplot(data=PCA_matrix, x="PC1", y="PC2", hue="Population", palette=self.color_map, edgecolor=None, alpha=1, s=75)
+            fig = plt.figure(figsize=(8, 8))
+            axs = fig.subplots(1)
+            sns.scatterplot(data=PCA_matrix, x="PC1", y="PC2", hue="Population", palette=self.color_map, edgecolor=None, alpha=1, s=75, ax=axs)
+            axs.set_aspect('equal', adjustable='box')
+
             plt.xticks(fontsize=15)
             plt.xlabel(f"PC1 ({EV[0]*100:0.2f}%)", fontsize=20)
             plt.ylabel(f"PC2 ({EV[1]*100:0.2f}%)", fontsize=20)
@@ -650,145 +655,6 @@ class subfamilyInference:
                 plt.close()
 
         return NT_headings.split(',')
-
-    def allele_tSNE(self, TE, outdir='/Users/iskander/Documents/Barbash_lab/TE_diversity_data/PCA_PLOTS', save_plot=False):
-        # PCA
-
-        #load in allele proportion matrix:
-        alleles = pd.read_csv(os.path.join(self.AP_df_path, f"{TE}.AP.GDL.minor.csv"))
-
-        #read in sample sheet
-        sample_sheet = pd.read_csv("/Users/iskander/Documents/Barbash_lab/TE_diversity_data/GDL_samples.tsv", header=None)
-        populations = [name[0] for name in sample_sheet[0]]
-        alpha = alleles.shape[0]/3 # num_samples/3 is a trick for tSNE to improve visualization by using early exaggeration
-
-        components = TSNE(n_components=2, init="pca", early_exaggeration=alpha, perplexity=50).fit_transform(alleles)
-
-        PCA_matrix = {"tSNE1":components[:,0], "tSNE2":components[:,1], "Population":populations}
-
-        with sns.axes_style("whitegrid"):
-            plt.figure(figsize=(12, 6))
-            sns.scatterplot(data=PCA_matrix, x="tSNE1", y="tSNE2", hue="Population", palette=self.color_map, edgecolor=None, alpha=0.8, s=75)
-            plt.xticks(fontsize=15)
-            plt.xlabel("t-SNE 1", fontsize=20)
-            plt.ylabel("t-SNE 2", fontsize=20)
-            plt.title(f"{TE}", fontsize=20)
-            plt.yticks(fontsize=15)
-
-            if save_plot == False:
-                plt.show()
-                plt.close()
-            else:
-                plot_name = '{0}_tSNE.png'.format(TE)
-                plot_out = os.path.join(outdir, plot_name)
-                plt.savefig(plot_out, dpi=300)
-                plt.close()
-
-    def correlate_minorAlleles(self, TE, pi_filter=0.1, CN_filter=0.5):
-
-        pi_data = np.load(os.path.join(self.div_path, TE + '_pi.npy'))
-        NTs = np.asarray(['A', 'T', 'C', 'G'], dtype="object")
-        pi_mask = np.asarray([], dtype=int)
-
-        for p in range(6):  # Get all sites within inter pop diversity > .1 or dataset wide pop div > .1
-            tmp_mask = np.where(pi_data[p] > pi_filter)
-            pi_mask = np.union1d(pi_mask, tmp_mask)
-
-        allele_CN = np.load(os.path.join(self.CN_path, TE + '_CN.npy'))
-        passed_alleles = allele_CN.T[pi_mask].T
-        passed_alleles[np.where(passed_alleles < CN_filter)] = 0
-        # sanitize data:
-        passed_alleles[np.isinf(passed_alleles)] = 0
-        passed_alleles[np.isnan(passed_alleles)] = 0
-        consensus = np.sum(passed_alleles, axis=0)
-        Major = np.argmax(consensus, axis=0)
-        CN_strain = np.sum(passed_alleles, axis=1)
-
-        SNP_file = np.load(os.path.join(self.SNP_path, TE+'_snps.npy'))
-        coverage = np.sum(SNP_file, axis=1)
-
-        # Construct data matrix to hold allele CN
-        corr_matrix = np.full(fill_value=np.nan, shape=(passed_alleles.shape[2], 8))
-
-        colnames = np.asarray([], dtype='object')
-
-        for NT in range(passed_alleles.shape[2]):
-            minor_alleles = [n for n in range(4) if n != Major[NT]]
-            # Get the NT labels
-            labels = NTs[minor_alleles]
-            colnames = np.concatenate(
-                (colnames, np.asarray([l + '_' + str(pi_mask[NT]) for l in labels], dtype='object')))
-
-            #Get the coverage at the position:
-            mean_coverage = np.average(coverage.T[pi_mask[NT]])
-
-            # Get CN
-            totalCN = np.sum(passed_alleles.T[NT])
-            minorCN = passed_alleles.T[NT, minor_alleles]
-
-            filled_strains = np.count_nonzero(minorCN, axis=1)
-            total = np.sum(minorCN, axis=1)
-            order = np.argsort(total)
-            if (filled_strains[order[2]] >= 10 and filled_strains[order[1]] >= 10) or (total[order[2]] > 10 and total[order[1]] > 10):
-                #corr = np.corrcoef(minorCN[order[2]], minorCN[order[1]])[0,1]
-                corr, p = sp.spearmanr(minorCN[order[2]], minorCN[order[1]])
-                corr_matrix[NT, 0] = corr
-                corr_matrix[NT, 1] = total[order[1]]
-                corr_matrix[NT, 2] = total[order[2]]
-
-                # Get AP
-                minorAP = minorCN / CN_strain.T[NT]
-                corr, p = sp.spearmanr(minorAP[order[2]], minorAP[order[1]])
-                corr_matrix[NT, 3] = corr
-                corr_matrix[NT, 4] = total[order[1]] / totalCN
-                corr_matrix[NT, 5] = total[order[2]] / totalCN
-
-                #add position
-                corr_matrix[NT, 6] = pi_mask[NT]
-
-                #add the average coverage:
-                corr_matrix[NT, 7] = mean_coverage
-        #corr_matrix = np.nan_to_num(corr_matrix, 0)
-
-        return corr_matrix
-
-    def plot_minorAllele_corrs(self, correlation_matrix):
-
-        with sns.axes_style('whitegrid'):
-            fig = plt.figure(figsize=(15, 15))
-            axs = fig.subplots(4, 2)
-            sns.scatterplot(x=np.log10(correlation_matrix[:, 1]), y=correlation_matrix[:, 0], alpha=0.8, edgecolor=None, ax=axs[0,0])
-            sns.scatterplot(x=np.log10(correlation_matrix[:, 2]), y=correlation_matrix[:, 0], alpha=0.8, edgecolor=None, ax=axs[1,0])
-            sns.scatterplot(x=np.log10(correlation_matrix[:, 2]), y=np.log10(correlation_matrix[:, 1]), hue=correlation_matrix[:,0], alpha=0.8, edgecolor=None, ax=axs[2,0])
-            axs[0,0].set_xlabel('3rd allele total CN', fontsize=20)
-            axs[1,0].set_xlabel('2nd allele total CN', fontsize=20)
-            axs[0,0].set_ylabel('Correlation', fontsize=20)
-            axs[1,0].set_ylabel('Correlation', fontsize=20)
-            axs[2,0].set_ylabel('3rd allele total CN', fontsize=20)
-            axs[2,0].set_xlabel('2nd allele total CN', fontsize=20)
-
-
-            #AP plots:
-            sns.scatterplot(x=correlation_matrix[:, 4], y=correlation_matrix[:, 3], alpha=0.8, edgecolor=None, ax=axs[0,1])
-            sns.scatterplot(x=correlation_matrix[:, 5], y=correlation_matrix[:, 3], alpha=0.8, edgecolor=None, ax=axs[1,1])
-            sns.scatterplot(x=correlation_matrix[:, 5], y=correlation_matrix[:, 4], hue=correlation_matrix[:,3], alpha=0.8, edgecolor=None, ax=axs[2,1])
-            axs[0,1].set_xlabel('3rd allele total AP', fontsize=20)
-            axs[1,1].set_xlabel('2nd allele total AP', fontsize=20)
-            axs[0,1].set_ylabel('Correlation', fontsize=20)
-            axs[1,1].set_ylabel('Correlation', fontsize=20)
-            axs[2,1].set_ylabel('3rd allele total AP', fontsize=20)
-            axs[2,1].set_xlabel('2nd allele total AP', fontsize=20)
-
-            #Coverage
-            sns.scatterplot(x=correlation_matrix[:, 6], y=correlation_matrix[:, 0], alpha=0.8, edgecolor=None, ax=axs[3,0])
-            sns.scatterplot(x=correlation_matrix[:, 7], y=correlation_matrix[:, 0], alpha=0.8, edgecolor=None, ax=axs[3,1])
-            axs[3,0].set_xlabel('Position', fontsize=20)
-            axs[3,0].set_ylabel('Correlation', fontsize=20)
-            axs[3,1].set_xlabel('Average Coverage', fontsize=20)
-            axs[3,1].set_ylabel('Correlation', fontsize=20)
-            plt.tight_layout()
-            plt.show()
-            plt.close()
 
     def CNAP_extraction(self, TE, pi_filter=.1, CN_filter=0.5, minFreq=0.1, min_strains=10):
 
@@ -1502,56 +1368,42 @@ class haplotypeAnalysis:
 
         KW_statistics['eta_bin'] = pd.cut(abs(KW_statistics['eta']), bin, precision=0)
 
+        order = np.concatenate([group[1][0].values for group in self.active_fullLength.groupby(1)])
+        order = [self.TE_nameTable[u] for u in order]
+
+        clean_class = {"HTT": "Telomeric", "LINE": "LINE-like", "LTR": "LTR retrotransposon", "TIR": "DNA transposon"}
+        TE_class = np.asarray([])
+        for TE_name in self.active_fullLength.values:
+            TE_class = np.concatenate((TE_class,[clean_class[TE_name[1]] for j in range(KW_statistics[KW_statistics["TE"] == TE_name[0]].shape[0])]))
+
+            #TE_class = np.concatenate((TE_class, np.asarray([self.active_fullLength[ self.active_fullLength[0] == group[0] ][1].values[0] for hap in range(group[1].shape[0])]) ) )
+        KW_statistics['te_class'] = TE_class
+
         cleanNames = [self.TE_nameTable[N] for N in KW_statistics["TE"]]
         KW_statistics["TE"] = cleanNames
-        mean_p = np.full(fill_value=np.nan, shape=(len(set(KW_statistics['TE'].values)), 2), dtype='object')
-        i = 0
-        for data in KW_statistics.groupby('TE')['P']:  # order the groups of TEs from smallest to largest mean/median p val/eta in the distribution
-            name = data[0]
-            pval = np.median(data[1])
-            mean_p[i, 0] = pval
-            mean_p[i, 1] = name
-            i += 1
-        order_TE = mean_p[:, 1][np.argsort(mean_p[:, 0])]
+
+
         diff_percentiles = sp.percentileofscore(KW_statistics['P'], bonferonni)
         print(diff_percentiles)
 
         with sns.axes_style('whitegrid'):
-            fig = plt.figure(figsize=(15, 15), constrained_layout=False)
-            axs = fig.subplots(2, 1, sharex=True, gridspec_kw={'height_ratios': [3, 1]})
-            cmap = plt.get_cmap("flare")
+            fig = plt.figure(figsize=(14, 7), constrained_layout=False)
+            axs = fig.subplots(1)
 
-            sns.stripplot(data=KW_statistics, y='TE', x='P', s=3, alpha=0.9, edgecolor='black', jitter=0.2,
-                              order=order_TE, ax=axs[0], dodge=False, linewidth=0, color="black")
+            sns.stripplot(data=KW_statistics, x='TE', y='P', s=5, alpha=0.8, edgecolor='black', jitter=0.2,
+                              order=order, ax=axs, dodge=False, linewidth=0.5, hue='te_class',
+                          hue_order=["Telomeric", "LINE-like", "LTR retrotransposon", "DNA transposon"], palette=["#430398", "#B40066", "#8BD100", "#E0CC00"])
 
 
-            sns.boxplot(data=KW_statistics, y='TE', x='P', saturation=0.5, order=order_TE, ax=axs[0], showfliers=False)
+            sns.boxplot(data=KW_statistics, x='TE', y='P', saturation=0.75, order=order, ax=axs, showfliers=False, color="white")
+            axs.axhline(bonferonni, linestyle='--', color='red')
 
-            sns.distplot(a=KW_statistics['P'], ax=axs[1], kde=False)
-            axs[0].axvline(bonferonni, linestyle='--', color='red')
-            axs[1].axvline(bonferonni, linestyle='--', color='red')
+            plt.ylabel('-log2(p)', fontsize=25)
+            plt.yticks(fontsize=15)
+            plt.xticks(fontsize=15, rotation=90)
+            plt.xlabel('')
+            plt.legend(fontsize=15, markerscale=2, edgecolor='black')
 
-            axs[1].set_xticklabels(labels=axs[1].get_xticks(), fontsize=15)
-            axs[0].set_xlabel('')
-            axs[0].set_yticklabels(labels=axs[0].get_yticklabels(), fontsize=18)
-            axs[0].set_ylabel('')
-            axs[1].set_xlabel('-log2(p)', fontsize=25)
-            axs[1].set_ylabel('Number of haplotypes', fontsize=25)
-            yticks= ["{0:.0f}".format(y) for y in axs[1].get_yticks()]
-            xticks = ["{0:.2f}".format(x) for x in axs[1].get_xticks()]
-            axs[1].set_yticklabels(labels=yticks, fontsize=15)
-            axs[1].set_xticklabels(labels=xticks, fontsize=15)
-
-            #norm = plt.Normalize(0, KW_statistics['eta'].max())
-            #sm = ScalarMappable(norm=norm, cmap=cmap)
-            #sm.set_array([])
-            #cbar = fig.colorbar(sm, ax=axs[0])
-            #cbar.ax.set_title("Effect size")
-
-            # remove the legend created by seaborn
-            #axs[0].legend_.remove()
-
-            #plt.suptitle('Kruskal-Wallis Test on Haplotype Copy Number', fontsize=25)
             fig.tight_layout()
             if saveplot:
                 plt.savefig("/Users/iskander/Documents/Barbash_lab/TE_diversity_data/ALLELE_PLOTS/KW_haplotypeClusters.png", dpi=300)
@@ -2561,7 +2413,6 @@ class simulateHaplotypes:
         sample_sheet.to_csv(os.path.join(simDir, simName+".PacBio_samples.csv"), index=False)
         var_df.to_csv(os.path.join(simDir, simName + ".PacBio_variants.csv"), index=False)
 
-
 class piRNA:
 
     def __init__(self, active_te_path='/Users/iskander/Documents/Barbash_lab/TE_diversity_data/ACTIVE_TES_internal.tsv', active_full_path='/Users/iskander/Documents/Barbash_lab/TE_diversity_data/ACTIVE_TES_full.tsv'):
@@ -2932,8 +2783,6 @@ class piRNA:
         sense_r, sense_p = sp.spearmanr(CN, sense_haplo)
         antisense_r, antisense_p = sp.spearmanr(CN, antisense_haplo)
 
-        print(sense_r, sense_p)
-        print(antisense_r, antisense_p)
         stranded = ["+" for S in range(len(sense_haplo))] + ["-" for M in range(len(antisense_haplo))]
         piRNA_df = pd.DataFrame(data={"piRNA": piRNA_matrix, "CN": np.concatenate((CN, CN)),
                                       "Population": ["Beijing", "Beijing", "Ithaca", "Ithaca", "Netherlands", "Netherlands",
@@ -2944,32 +2793,33 @@ class piRNA:
         seqAnal = subfamilyInference()
         # make plot
         with sns.axes_style("whitegrid"):
-            fig = plt.figure(figsize=(14, 6))
+            fig = plt.figure(figsize=(10, 8))
+            axs = fig.subplots(1)
             pal = ["#FF0D00","#01B2C2"]
             #regplot = sns.lmplot(data=piRNA_df, x="piRNA", y="CN", scatter=True, height=5, aspect=2, ci=None, hue="Stranded", line_kws={"linestyle": "--"},
                                  #scatter_kws={"s":75}, legend_out=False, palette=["#FF0D00","#01B2C2"], hue_order=["+", "-"])
             if pop == False:
-                scatplot = sns.scatterplot(data=piRNA_df, x="piRNA", y="CN", hue="Strand", palette=pal, hue_order=["+", "-"], edgecolor=None, s=75)
+                scatplot = sns.scatterplot(data=piRNA_df, y="piRNA", x="CN", hue="Strand", palette=pal, hue_order=["+", "-"], edgecolor="black", s=250, alpha=0.75, ax=axs)
             else:
-                scatplot = sns.scatterplot(data=piRNA_df, x="piRNA", y="CN", hue="Population", palette=self.color_map,
-                                           hue_order=["Beijing", "Ithaca", "Netherlands", "Tasmania", "Zimbabwe"], style="Strand", style_order=["+", "-"], markers=["P", "s"], edgecolor="black", s=150)
-            plt.xlabel("piRNA read depth", size=20)
-            plt.ylabel("Copy Number", size=20)
-
+                scatplot = sns.scatterplot(data=piRNA_df, y="piRNA", x="CN", hue="Population", palette=self.color_map,
+                                           hue_order=["Beijing", "Ithaca", "Netherlands", "Tasmania", "Zimbabwe"], style="Strand", style_order=["+", "-"], markers=["P", "s"], edgecolor="black", s=150, ax=axs)
+            plt.ylabel("piRNA read depth", size=20)
+            plt.xlabel("Copy Number", size=20)
+            #axs.set_aspect('equal', adjustable='box')
             if abline:
                 j = 0
                 for g in piRNA_df.groupby("Strand"):
-                    reg = LinearRegression().fit(g[1]["piRNA"].values.reshape(-1, 1), g[1]["CN"].values.reshape(-1, 1))
+                    reg = LinearRegression().fit(g[1]["CN"].values.reshape(-1, 1), g[1]["piRNA"].values.reshape(-1, 1))
                     inter = reg.intercept_[0]
                     corr = reg.coef_[0]
-                    seqAnal.abline(slope=corr, intercept=inter, col=pal[j])
+                    seqAnal.abline(slope=corr, intercept=inter, col=pal[j], axs=axs)
                     j += 1
             #plt.yscale(value=scale)
-            plt.xscale(value=scale)
+            plt.yscale(value=scale)
             h, l = scatplot.get_legend_handles_labels()
             if pop == True:
-                leg1 = scatplot.legend(h[0:6], l[0:6], fontsize=15, markerscale=2, edgecolor="black", ncol=1, title_fontsize=15, loc=(0.1, 0.615))
-                leg2 = scatplot.legend(h[7:9], l[7:9], fontsize=15, markerscale=2, edgecolor="black", ncol=1, title_fontsize=15, title="Strand", loc="upper left")
+                leg1 = scatplot.legend(h[0:6], l[0:6], fontsize=15, markerscale=2, edgecolor="black", ncol=1, title_fontsize=15, loc="lower right") #(0.1, 0.615)
+                leg2 = scatplot.legend(h[7:9], l[7:9], fontsize=15, markerscale=2, edgecolor="black", ncol=1, title_fontsize=15, title="Strand", loc=(0.765, 0.1))
                 scatplot.add_artist(leg1)
             else:
                 scatplot.legend(fontsize=15, markerscale=2, edgecolor='black', ncol=1, title_fontsize=15)
@@ -2984,6 +2834,7 @@ class piRNA:
             else:
                 plt.show()
                 plt.close()
+        return sense_r, sense_p, antisense_r, antisense_p
 
     def haplotype_piRNA(self, TE, stranded="antisense", cluster="none"):
         """
@@ -3124,7 +2975,7 @@ class piRNA:
                                       "Haplotype":[cluster for t in range(29)]})
         if plot == True:
             with sns.axes_style("whitegrid"):
-                fig = plt.figure(figsize=(10,8))
+                fig = plt.figure(figsize=(8,8))
 
                 cmap = self.color_map + ["#ED0086", "#B400E0","#E5FD00", "#A6F900"]
                 sns.scatterplot(data=piRNA_df, x="+", y="-", hue="Population/strain", s=100, edgecolor="black", palette=cmap, hue_order=["Beijing", "Ithaca", "Netherlands","Tasmania", "Zimbabwe","Raleigh", "ISO-1", "Misy", "Paris"])
@@ -3318,6 +3169,8 @@ class piRNA:
                 avg_sense_ratios = np.nanmean( np.divide(sense_pi[piRNA_strain][sense_positions],  CN_pi[GDL_strain,:][sense_positions]) )
                 avg_antisese_ratios = np.nanmean( np.divide(antisense_pi[piRNA_strain][antisense_positions], CN_pi[GDL_strain,:][antisense_positions]))
             else:
+
+
                 avg_sense_ratios = np.nanmean(sense_pi[piRNA_strain]) / np.nanmean(CN_pi[GDL_strain, :])
                 avg_antisese_ratios = np.nanmean(antisense_pi[piRNA_strain][antisense_positions]) / np.nanmean(CN_pi[GDL_strain, :][antisense_positions])
 
@@ -3337,7 +3190,13 @@ class piRNA:
                 nuisance_r2_antisense = np.nan
                 r2_sense = np.nan
                 r2_antisense = np.nan
+                sense_corr = np.nan
+                antisense_corr = np.nan
             else:
+
+                antisense_corr = sp.pearsonr(antisense_pi[piRNA_strain][antisense_positions], CN_pi[GDL_strain, :][antisense_positions])
+                sense_corr = sp.pearsonr(antisense_pi[piRNA_strain][sense_positions], CN_pi[GDL_strain, :][sense_positions])
+
                 antisense_model = LinearRegression().fit(y=antisense_pi[piRNA_strain][antisense_positions], X=antisense_x[:, 0].reshape(-1, 1))
                 sense_model = LinearRegression().fit(y=sense_pi[piRNA_strain][sense_positions], X=sense_x[:,0].reshape(-1, 1))
 
@@ -3361,6 +3220,59 @@ class piRNA:
 
         return pi_data
 
+    def calculate_GDL_diversity(self, minReads=0.5):
+        """
+
+        Calculate the sequence diversity statistics pooling the 10 GDL piRNA and 10 GDL genomic data. This way we can match
+        our dataset and bulk up our sample.
+
+        :param TE:
+        :return:
+        """
+        clean_class = {"HTT": "Telomeric", "LINE": "LINE-like", "LTR": "LTR retrotransposon", "TIR": "DNA transposon"}
+
+        seqDiversity = {"piRNA_pi":[], "strand":[], "genomic_pi":[], "TE":[], "class":[]}
+        sum_stats = summary_stats()
+        hapAnalysis = haplotypeAnalysis()
+        GDL_pirna = [0, 1, 2, 3, 6, 7, 25, 26, 27, 28]
+        GDL_ngs = [2, 4, 19, 23, 39, 44, 55, 56, 81, 83]
+        for TE, superclass in self.active_fullLength.values:
+
+            piRNA = np.load(os.path.join(self.pileup_dir, f"{TE}.normalized.stranded.pirna.npy"))
+
+
+            antisense_reads = piRNA[:, 4:8][GDL_pirna]
+            sense_reads = piRNA[:, 0:4][GDL_pirna]
+
+            #in order to account for some sequencing error I will remove SNPs from the piRNA data that appear in less than 0.5 copies in the genomic data.
+            CN = np.load(os.path.join(hapAnalysis.CN_path, f"{TE}_CN.npy"))
+
+            SNP_filter = CN[GDL_ngs] < minReads
+
+            #print(np.sum(sense_reads[GDL_pirna][SNP_filter]))
+            sense_reads[SNP_filter] = 0
+            antisense_reads[SNP_filter] = 0
+
+            #print(sense_reads[GDL_pirna][SNP_filter])
+
+            sense_pi = np.average(sum_stats.pop_Pi(sense_reads, indiv_strains=False, min_CN=0))
+
+            antisense_pi = np.average(sum_stats.pop_Pi(antisense_reads, indiv_strains=False, min_CN=0))
+
+
+
+            CN_pi = np.average(sum_stats.pop_Pi(CN[GDL_ngs], indiv_strains=False, min_CN=minReads))
+
+            seqDiversity["piRNA_pi"] = seqDiversity["piRNA_pi"]+ [np.average(sense_pi), np.average(antisense_pi)]
+            seqDiversity["strand"] = seqDiversity["strand"] + ["+", "-"]
+            seqDiversity["TE"] = seqDiversity["TE"] + [hapAnalysis.TE_nameTable[TE], hapAnalysis.TE_nameTable[TE]]
+            seqDiversity["genomic_pi"] = seqDiversity["genomic_pi"] + [CN_pi, CN_pi]
+            seqDiversity["class"] = seqDiversity["class"] + [clean_class[superclass], clean_class[superclass]]
+
+        seqDiversity = pd.DataFrame(data=seqDiversity)
+
+        return seqDiversity
+
     def diversityData(self, p=True):
 
         data = {"pi_ratio": [], "r-squared_pi": [],
@@ -3372,6 +3284,13 @@ class piRNA:
 
             DF = self.piRNA_diversity(TE, p)
             pi_data = pd.concat((pi_data, DF), axis=0)
+
+        clean_class = {"HTT": "Telomeric", "LINE": "LINE-like", "LTR": "LTR retrotransposon", "TIR": "DNA transposon"}
+        class_arr = np.full(fill_value="", shape=pi_data.shape[0], dtype="object")
+        for ind, TE in self.active_fullLength.iterrows():
+            class_arr[pi_data["TE"] == TE[0]] = clean_class[TE[1]]
+
+        pi_data["class"] = class_arr
 
         return pi_data
 
