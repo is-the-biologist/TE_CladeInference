@@ -2,6 +2,35 @@
 
 The included Python and R scripts are used to infer TE clades from copy number data as detailed in [publication]. Detailed Jupyter and Rmarkdown notebooks will walk you through implementing the modules, but this README will include brief overview of usage of the packages. 
 
+## Necessary python libraries:
+pandas
+numpy
+os
+seaborn
+matplotlib
+sys
+scipy
+scikit-learn
+biopython
+pysftp
+datetime
+statsmodels
+functools
+multiprocessing
+pysam
+
+## Necessary R libraries:
+pheatmap
+plyr
+ggplot2
+ggdendro
+matrixStats
+RColorBrewer
+reticulate
+viridis
+igraph
+Polychrome
+
 
 ## Aligning data and producing copy number matrices:
 
@@ -15,7 +44,7 @@ The clade inference tool is broken up into two parts: 1. A python script (haploT
 
 ### 1) Generate copy number csv:
 
-First extract the minor alleles from the copy number numpy file by using the haploTE.py modules. An example of this implementation is described in SCRIPT1. Several dateset specific parameters must be determined to generate the copy number csvs for each TE: minimum sequence diversity, minimum copy number, 
+First extract the minor alleles from the copy number numpy file by using the haploTE.py modules. An example of this implementation is described in SCRIPT1. Several dataset specific filtering parameters must be 
 
 ### 2) 
 
