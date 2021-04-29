@@ -1,0 +1,46 @@
+---
+title: "cladeInference_2"
+author: "Iskander Said"
+date: "12/4/2020"
+output: pdf_document
+---
+
+# README:
+
+This example shows how to reproduce the 
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+source("SubFamily_inference.R")
+
+D_v <- c(0.5681367868025526,0.46425191203547655,0.4411858547936054,0.3362603560047991,0.4690155981177684,0.4279731548675725,0.47954672375772367,0.3828725421957896,0.493537112004956,0.4079762709005661,0.46283619082924043,0.10953532870101146,0.05877489009985082,0.25041520839980236,0.22458378676520008,0.11214905821852161,0.1612952508109864,0.4473320219906931,0.45279129094375314,0.44604417371355054,0.4197051313816731,0.2793291335504422,0.4423797589884111,0.5604722705971066,0.5286508819650785,0.398416314339164,0.30157738115657606,0.4802006073845314,0.292457988290345,0.19825250859657662,0.28026597172753276,0.2671602311703489,0.3311246702909195,0.5589724996606225,0.4305439804110055,0.4684870714100676,0.2812052156911843,0.4015464749075728,0.3974947619382654,0.34603367074832647,0.3289465851987603) #correlation cut-offs for hierarchical clustering as defined by dissimilarity distance (1-r)
+
+
+pipeline<-function(haplotype_call, corr_cutoff=D_v){
+  
+  bool_mask <- c(FALSE,TRUE,FALSE,FALSE,TRUE,FALSE,FALSE,FALSE,FALSE,TRUE,FALSE,TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,FALSE,FALSE,FALSE,FALSE,TRUE,FALSE,FALSE,FALSE,FALSE,FALSE,FALSE,FALSE,FALSE,FALSE,FALSE,FALSE,FALSE,FALSE,TRUE,TRUE,TRUE,TRUE,TRUE,TRUE) #This array contains the mask of whether or not to remove copy number outliers from inference
+  
+  output=paste0('TEST_DATA/', haplotype_call)
+  
+  #create new directory
+  if (dir.exists(output) ){
+    
+  }
+  else{
+    dir.create(output)
+  }
+  te_df <- read.csv('TEST_DATA/ACTIVE_TES_full.tsv', header = FALSE)
+  for (t in 1:length(te_df$V1)){
+    
+    input_path = paste0('TEST_DATA/CN_tables/FULL/')
+    outlier_path = paste0('TEST_DATA/CN_tables/NO_OUTLIERS/')
+    TE=file.path(input_path,te_df$V1[t])
+    out_mask = bool_mask[t]
+    
+    extractHaplotypes(TE_name = TE, outlier = out_mask, output_dir = output, outlier_dir = outlier_path, dist_cutoff = corr_cutoff[t])
+    
+  }
+}
+
+```
+
