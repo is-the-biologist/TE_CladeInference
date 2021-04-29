@@ -65,13 +65,19 @@ It is necessary that the allele copy number data for the clade inference pipelin
 
 ## Clade inference:
 
-The clade inference tool is broken up into two parts: 1. A python script (haploTE.py) that will filter the allele copy number numpy data and output simplified CSVs with the copy number information. 2. An R script that takes in the copy number CSVs and outputs the clade calls. It is also necessary to have sample sheet file for your data set. This file is a two column comma seperated file where the first column is the population of origin of the individual and the second column is the sample ID of that individual in your dataset. This is necessary for computing population level summary statistics for both pre-processing data, and for the final output files. You also need a sample sheet of the designations for each TE you wish to analyze. This file should also be two columns that are comma seperated. The first column is the name of your TE (which should match the numpy file names), and the second column should contain class/subclass information e.g. LTR, LINE, etc. (second column is not strictly necessary for clade inference and may be filled with placeholders). 
-
-### 1) Generate copy number csv:
-
-First extract the minor alleles from the copy number numpy file to a CSVs by using the haploTE.py modules. An example of this implementation is described in cladeInference1.ipynb. The user must define allele filtering parameters: minimum positional sequence diversity, minimum allele population frequency, minimum allele copy number, and minimum number of strains with an allele. The default parameters for these filters are: 0.1, 0.1, 0.5 and 10, respectively. But the optimal value for the user may depend on the TEs being analyzed, the number of samples, and organism.
+The clade inference tool is broken up into two parts: 1. A python script (haploTE.py) that will filter the allele copy number numpy data and output simplified CSVs with the copy number information. 2. An R script that takes in the copy number CSVs and outputs the clade calls. 
 
 
+Three files are ncessary for this tool: an allele copy number numpy file for each TE (described above), a sample sheet for your genomics data set, and a TE list of the names of transposons being analyzed. 
 
-### 2) 
+The sample sheet file is a two column comma seperated file with an entry for each individual in your genomics dataset. The first column is the population of origin of an individual and the second column is the sample ID of that individual. This is necessary for computing population level summary statistics for both pre-processing data, and for the final output files. 
+
+You also need a TE list of the designations for each TE you wish to analyze. This file should also be two columns that are comma seperated. The first column is the name of your TE (which should match the numpy file names), and the second column should contain class/subclass information e.g. LTR, LINE, etc. (second column is not necessary for clade inference and may be filled with placeholders). 
+
+### 1) Generate copy number input:
+
+First extract the minor alleles from the copy number numpy file to a CSVs by using the haploTE.py modules. An example of this implementation is described in cladeInference1.ipynb. The user must define allele filtering parameters: minimum positional sequence diversity, minimum allele population frequency, minimum allele copy number, and minimum number of strains with an allele. The default parameters for these filters are: 0.1, 0.1, 0.5 and 10, respectively. But the optimal value for the user may depend on the TEs being analyzed, the number of samples, and organism. This process will return an S x N matrix for each TE, where S is the number of strains and N is the number of alleles. Each cell in the matrix represent the copy number of that allele in that strain. This table will be fed into the subfamilyInference.R module where the clade inference will occur. 
+
+
+### 2) Implement hierarchical clustering 
 
