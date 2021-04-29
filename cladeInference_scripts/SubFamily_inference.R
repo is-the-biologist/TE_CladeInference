@@ -1,6 +1,8 @@
 #This file contains the scripts that are used to infer subfamily structure via hierarchical clustering of correlated minor alleles
 #The main function used to generate these matrices is the pheatmap function.
 
+#RECENT VERSION 4/29/21
+
 library('pheatmap')
 library('plyr')
 library('ggplot2')
@@ -36,7 +38,7 @@ construct_linkage <- function(df, linkage, TE_name, names=FALSE, fontsize=8){
   
 }
 
-draw_heatmaps<-function(df, outlier_df, TE_name, dendrogram, names=FALSE, fontsize=10, sample="/Users/iskander/Documents/Barbash_lab/TE_diversity_data/GDL_sample_sheet.csv", color_pal=c('#6F0000','#009191','#6DB6FF','orange','#490092')) {
+draw_heatmaps<-function(df, outlier_df, TE_name, dendrogram, names=FALSE, fontsize=10, sample="/Users/iskander/Documents/Barbash_lab/TE_diversity_data/GDL_sample_sheet.csv", color_pal) {
   
   #This function will draw out the final heatmaps that use the dendrogram that we constructed in the get linkage function
   cmat <- cor(outlier_df) #get the correlation matrix
@@ -75,7 +77,8 @@ draw_heatmaps<-function(df, outlier_df, TE_name, dendrogram, names=FALSE, fontsi
                        main = TE_name,
                        show_rownames = FALSE,
                        show_colnames = FALSE,
-                       fontsize = fontsize
+                       fontsize = fontsize,
+                      silent = TRUE
   )
   
   #construct the correlation matrix and seriate it based on the linkage
@@ -90,8 +93,9 @@ draw_heatmaps<-function(df, outlier_df, TE_name, dendrogram, names=FALSE, fontsi
                 main = TE_name,
                 show_rownames = names,
                 show_colnames = FALSE,
-                fontsize = fontsize)
-  
+                fontsize = fontsize,
+                silent=TRUE
+  )
   return(list(pop_hmap, haplo_hmap))
 }
 
@@ -305,7 +309,9 @@ formatTable <- function(CN, clabels, stats_table, sample = '/Users/iskander/Docu
   
   clust_table <- matrix(nrow = dim(clabels)[1], ncol = total_cols)
   column_names <- c("Alleles" , colnames(stats_table), "Cluster Size", "Copy Number", as.character(CN$SAMPLE_ID))
+
   colnames(clust_table) <- column_names
+  
   
   
   #add alleles
@@ -362,7 +368,7 @@ read_TE_tables<-function(TE_file){
   return(output_DF)
 }
 
-extractHaplotypes <- function(TE_name, outlier=FALSE, outlier_dir, output_dir, linkage= 'average', minSize = T, dist_cutoff=0.5, hmap_labels=FALSE, dendro_labels=FALSE, plots=TRUE, 
+extractHaplotypes <- function(TE_name, outlier=FALSE, outlier_dir, output_dir, linkage= 'average', minSize = T, dist_cutoff=0.5, hmap_labels=FALSE, dendro_labels=FALSE, plots=TRUE, color_pal=c('#6F0000','#009191','#6DB6FF','orange','#490092'),
                               alleleCN_dir="/Users/iskander/Documents/Barbash_lab/TE_diversity_data/allele_CN/GDL_RUN-11-15-19", sample="/Users/iskander/Documents/Barbash_lab/TE_diversity_data/GDL_sample_sheet.csv"){
   #Function to wrap our analyses into one and then save all of the files into csvs, plots as needed
   TE_desig <- strsplit(basename(TE_name), '\\.')[[1]][1]
@@ -398,7 +404,7 @@ extractHaplotypes <- function(TE_name, outlier=FALSE, outlier_dir, output_dir, l
     
     dendrogram <- construct_linkage(allele_DF, linkage=linkage, TE_name = TE_desig, names = dendro_labels, fontsize = 7)
     
-    hmaps<-draw_heatmaps(df=allele_CN_DF, outlier_df = allele_DF, TE_name = TE_desig, dendrogram = dendrogram, names = hmap_labels, sample = sample)
+    hmaps<-draw_heatmaps(df=allele_CN_DF, outlier_df = allele_DF, TE_name = TE_desig, dendrogram = dendrogram, names = hmap_labels, sample = sample, color_pal = color_pal)
     
     plotting_dir <- file.path(output_dir,'PLOTS')
     
@@ -436,7 +442,7 @@ extractHaplotypes <- function(TE_name, outlier=FALSE, outlier_dir, output_dir, l
     haplo_Var <- haplo_list[[3]]
     
     stats <- getHaploclusterStats(haplo_CN, haplo_desig, TE_desig, CN_dir = alleleCN_dir, sample = sample)
-    cluster_table <- formatTable(haplo_CN, haplo_desig, stats)
+    cluster_table <- formatTable(haplo_CN, haplo_desig, stats, sample = sample)
   }
   
   #write out tables to path
