@@ -6,37 +6,60 @@ The included Python and R scripts are used to infer TE clades from copy number d
 
 ## Necessary python libraries:
 pandas
+
 numpy
+
 os
+
 seaborn
+
 matplotlib
+
 sys
+
 scipy
+
 scikit-learn
+
 biopython
+
 pysftp
+
 datetime
+
 statsmodels
+
 functools
+
 multiprocessing
+
 pysam
 
 ## Necessary R libraries:
 pheatmap
+
 plyr
+
 ggplot2
+
 ggdendro
+
 matrixStats
+
 RColorBrewer
+
 reticulate
+
 viridis
+
 igraph
+
 Polychrome
 
 
 ## Aligning data and producing copy number matrices:
 
-Data used in the [manuscript] was aligned using ConTExt (https://github.com/LaptopBiologist/ConTExt) and associated scripts and methods were used to generate copy number and SNP pileup files [citations]. Although we recommend using these methods to generate copy number data for clade inference it is not strictly necessary. Any method that produces allele frequencies from alignments and can estimate copy number from read depth of alignments to TE consensus sequences would be adequate.
+Short-read data (link to paper) was aligned using ConTExt (https://github.com/LaptopBiologist/ConTExt) and associated scripts and methods were used to generate copy number and SNP pileup files (https://academic.oup.com/genetics/article-abstract/217/2/iyaa027/6043924). Although we recommend using these methods to generate copy number data for clade inference it is not strictly necessary. Any method that produces allele frequencies from alignments and can estimate copy number from read depth of alignments to TE consensus sequences would be adequate.
 
 It is necessary that the allele copy number data for the clade inference pipeline be formatted as a numpy file with the following dimensions S x n+1 x 4. Where S is the number of individuals in the data set, and n is the number of basepairs in the TE consensus. Each element in the 1st dimension of the matrix corresponds to an individual from your dataset. Each element of the 2nd dimension corresponds to a particular basepair position in the TE sequence plus a placeholder at the first position which should be filled with zeros. Each element in the third dimension is a nucleotide in the order [A, T, C, G]. Thus this matrix will tell us for each individual in our dataset what the copy number is at every position and for each possible nucleotide at that position. Our clade inference pipeline requires a matrix formatted in this way to function.
 
