@@ -5,57 +5,13 @@
 The included Python and R scripts are used to infer TE clades from copy number data as detailed in [publication]. Detailed Jupyter and Rmarkdown notebooks will walk you through implementing the modules, but this README will include brief overview of usage of the packages. 
 
 ## Necessary python libraries:
-pandas
-
-numpy
-
-os
-
-seaborn
-
-matplotlib
-
-sys
-
-scipy
-
-scikit-learn
-
-biopython
-
-pysftp
-
-datetime
-
-statsmodels
-
-functools
-
-multiprocessing
-
-pysam
+pandas, numpy, os, seaborn, matplotlib, sys, scipy, scikit-learn, biopython, pysftp, datetime, statsmodels, functools, multiprocessing, pysam
 
 ## Necessary R libraries:
-pheatmap
+pheatmap, plyr, ggplot2, ggdendro, matrixStats, RColorBrewer, reticulate, viridis, igraph, Polychrome
 
-plyr
-
-ggplot2
-
-ggdendro
-
-matrixStats
-
-RColorBrewer
-
-reticulate
-
-viridis
-
-igraph
-
-Polychrome
-
+## Test data:
+Test data in this repository is derived from 85 D. melanogaster genomes from the Global Diversity Lines (link). These data have been used to infer clades in 41 recently active TEs, and the notebooks included in this repository will allow the user to reproduce clade inferences from (link to paper). 
 
 ## Aligning data and producing copy number matrices:
 
@@ -76,8 +32,26 @@ You also need a TE list of the designations for each TE you wish to analyze. Thi
 
 ### 1) Generate copy number input:
 
-First extract the minor alleles from the copy number numpy file to a CSVs by using the haploTE.py modules. An example of this implementation is described in cladeInference1.ipynb. The user must define allele filtering parameters: minimum positional sequence diversity, minimum allele population frequency, minimum allele copy number, and minimum number of strains with an allele. The default parameters for these filters are: 0.1, 0.1, 0.5 and 10, respectively. But the optimal value for the user may depend on the TEs being analyzed, the number of samples, and organism. This process will return an S x N matrix for each TE, where S is the number of strains and N is the number of alleles. Each cell in the matrix represent the copy number of that allele in that strain. This table will be fed into the subfamilyInference.R module where the clade inference will occur. 
+First extract the minor alleles from the copy number numpy file to a CSVs by using the haploTE.py modules. An example of this implementation is described in cladeInference1.ipynb. 
+
+#### Input:
+The haploTE.py module requires an allele copy number numpy file as described in the above sections. Additionally, it requires the population sample sheet and the TE list. 
+
+#### Parameters:
+The user must define allele filtering parameters: minimum positional sequence diversity, minimum allele population frequency, minimum allele copy number, and minimum number of strains with an allele. The default parameters for these filters are: 0.1, 0.1, 0.5 and 10, respectively. But the optimal value for the user may depend on the TEs being analyzed, the number of samples, and organism. 
 
 
-### 2) Implement hierarchical clustering 
+#### Output:
+This module will return an S x N matrix for each TE, where S is the number of strains and N is the number of alleles. Each cell in the matrix represent the copy number of that allele in that strain. This table will be fed into the subfamilyInference.R module where the clade inference will occur. 
+
+
+### 2) Implement hierarchical clustering:
+
+Once the allele copy number CSVs have been generated use the subfamilyInference.R module to implement the hierarchical clustering to infer clades and generate summary statistics of each clade. The cladeInference.Rmd notebook will run you through an example implentation using the test data in the repository. 
+
+#### Input:
+subfamilyInference.R requires an allele copy number CSV for each TE to infer clades as well as th aforementioned allele copy number numpy files to generate population level summary statistics. 
+
+
+
 
