@@ -62,4 +62,4 @@ The user must input a **distance cut-off** for hierarchical clustering. The infe
 The Subfamily_inference.R module will produce several outputs, both graphical and tabular:
 
 1. Firstly, you will receive a visualization of the seriated correlation **heatmap** for each TE showing the degree of correlation between pairwise combinations of alleles. Along with this is a **dendrogram**, visualizing the hierarchical clustering of the alleles. These are useful for qualitatively assessing clustering cut-off accuracy. The program will produce an additional seriated **heatmap** showing the copy number of each allele in each strain labelled by their respective populations, which can be useful for visualizing population structure.
-2. The tabular outputs you will receive are a .haplotypeTable.tsv and __cluster_CN.tsv.
+2. The tabular outputs you will receive are a .haplotypeTable.tsv and \_cluster_CN.tsv.
