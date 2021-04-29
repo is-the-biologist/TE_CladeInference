@@ -1,5 +1,3 @@
-# ***UNFINISHED***
-
 # Manual:
 
 The included Python and R scripts are used to infer TE clades from copy number data as detailed in [publication]. Detailed Jupyter and Rmarkdown notebooks will walk you through implementing the modules, but this README will include brief overview of usage of the packages. 
@@ -59,7 +57,10 @@ Subfamily_inference.R requires an **allele copy number CSV** for each TE to infe
 The user must input a **distance cut-off** for hierarchical clustering. The inference algorithm builds a correlation matrix and converts this matrix into a distance matrix by computing the dissimilarity distance (1 - correlation coefficient). Distance cut-off must therefore be in input as 1 minus the desired correlation cut-off. Determining the optimal distance cut-off is non-trivial and we recommend a procedure similar to one outlined in (link to paper) to determine a satisfactory cut-off. Ultimately, there is coarse-graining in this procedure and there will be no single parameter that optimally clusters alleles. You may additionally desire to change the linkage method in the clustering algorithm, which can be re-defined by any linkage method from R's pheatmap function. Importantly, you must define a color palette for each of your populations for visualization.
 
 #### Output:
-The Subfamily_inference.R module will produce several outputs, both graphical and tabular:
+The Subfamily_inference.R module will produce several outputs, both graphical and tabular for each TE in a new directory:
 
 1. Firstly, you will receive a visualization of the seriated correlation **heatmap** for each TE showing the degree of correlation between pairwise combinations of alleles. Along with this is a **dendrogram**, visualizing the hierarchical clustering of the alleles. These are useful for qualitatively assessing clustering cut-off accuracy. The program will produce an additional seriated **heatmap** showing the copy number of each allele in each strain labelled by their respective populations, which can be useful for visualizing population structure.
-2. The tabular outputs you will receive are a .haplotypeTable.tsv and \_cluster_CN.tsv.
+2. The tabular outputs you will receive are a .haplotypeTable.tsv and \_cluster_CN.tsv. The .haplotypeTable.tsv is a tab delimited file that contains all relevant summary statistics and copy number of each clade. Each row corresponds to a clade and has a unique Cluster_ID. The first few columns of the table will retain population level summary statistics, such as average population copy number and population frequency of each clade. Following an empty column the remaining columns contain the copy number of each clade in the individuals in the dataset. The \cluster_CN.tsv is a redundant table and is depreciated.
+
+
+Using the test data and the notebooks presented in this repository you will be able to reproduce our clade inferences from (link to publication). These modules are generalizable enough to be used in any population genomics data set.
