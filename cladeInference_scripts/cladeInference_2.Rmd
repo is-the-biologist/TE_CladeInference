@@ -20,7 +20,7 @@ pipeline<-function(clade_call, corr_cutoff){
   
   bool_mask <- c(FALSE,TRUE,FALSE,FALSE,TRUE,FALSE,FALSE,FALSE,FALSE,TRUE,FALSE,TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,FALSE,FALSE,FALSE,FALSE,TRUE,FALSE,FALSE,FALSE,FALSE,FALSE,FALSE,FALSE,FALSE,FALSE,FALSE,FALSE,FALSE,FALSE,TRUE,TRUE,TRUE,TRUE,TRUE,TRUE) #This array contains the mask of whether or not to remove copy number outliers from inference
   
-  output=paste0('TEST_DATA/', haplotype_call) #change to your chosen output directory
+  output=paste0('TEST_DATA/', clade_call) #change to your chosen output directory
   
   #create new directory
   if (dir.exists(output) ){
