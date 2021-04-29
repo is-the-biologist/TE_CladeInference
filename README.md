@@ -36,7 +36,7 @@ Polychrome
 
 Data used in the [manuscript] was aligned using ConTExt (https://github.com/LaptopBiologist/ConTExt) and associated scripts and methods were used to generate copy number and SNP pileup files [citations]. Although we recommend using these methods to generate copy number data for clade inference it is not strictly necessary. Any method that produces allele frequencies from alignments and can estimate copy number from read depth of alignments to TE consensus sequences would be adequate.
 
-What is necessary is that the allele copy number data for that clade inference pipeline be formatted as a numpy file with the following dimensions S x n+1 x 4. Where S is the number of individuals in the data set, and n is the number of basepairs in the TE consensus. Each element in the 1st dimension of the matrix corresponds to an individual from your dataset. Each element of the 2nd dimension corresponds to a particular basepair position in the TE sequence plus a placeholder at the first position which should be filled with zeros. Each element in the third dimension is a nucleotide in the order [A, T, C, G]. Thus this matrix will tell us for each individual in our dataset what the copy number is at every position and for each possible nucleotide at that position. Our clade inference pipeline requires a matrix formatted in this way to function.
+It is necessary that the allele copy number data for the clade inference pipeline be formatted as a numpy file with the following dimensions S x n+1 x 4. Where S is the number of individuals in the data set, and n is the number of basepairs in the TE consensus. Each element in the 1st dimension of the matrix corresponds to an individual from your dataset. Each element of the 2nd dimension corresponds to a particular basepair position in the TE sequence plus a placeholder at the first position which should be filled with zeros. Each element in the third dimension is a nucleotide in the order [A, T, C, G]. Thus this matrix will tell us for each individual in our dataset what the copy number is at every position and for each possible nucleotide at that position. Our clade inference pipeline requires a matrix formatted in this way to function.
 
 ## Clade inference:
 
@@ -44,7 +44,9 @@ The clade inference tool is broken up into two parts: 1. A python script (haploT
 
 ### 1) Generate copy number csv:
 
-First extract the minor alleles from the copy number numpy file by using the haploTE.py modules. An example of this implementation is described in SCRIPT1. Several dataset specific filtering parameters must be 
+First extract the minor alleles from the copy number numpy file to a CSVs by using the haploTE.py modules. An example of this implementation is described in cladeInference1.ipynb. The user must define allele filtering parameters: minimum positional sequence diversity, minimum allele population frequency, minimum allele copy number, and minimum number of strains with an allele. The default parameters for these filters are: 0.1, 0.1, 0.5 and 10, respectively. But the optimal value for the user may depend on the TEs being analyzed, the number of samples, and organism.
+
+
 
 ### 2) 
 
