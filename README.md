@@ -1,3 +1,5 @@
+# ***UNFINISHED***
+
 # Manual:
 
 The included Python and R scripts are used to infer TE clades from copy number data as detailed in [publication]. Detailed Jupyter and Rmarkdown notebooks will walk you through implementing the modules, but this README will include brief overview of usage of the packages. 
