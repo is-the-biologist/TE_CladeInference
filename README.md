@@ -41,7 +41,7 @@ First extract the minor alleles from the copy number numpy file to a CSVs by usi
 The haploTE.py module requires an **allele copy number numpy file**, **sample sheet** and **TE list** as described previously. 
 
 #### Parameters:
-The user must define allele filtering parameters: minimum positional sequence diversity, minimum allele population frequency, minimum allele copy number, and minimum number of strains with an allele. The default parameters for these filters are: 0.1, 0.1, 0.5 and 10, respectively. But the optimal value for the user may depend on the TEs being analyzed, the number of samples, and organism. 
+The user must define allele filtering parameters: **minimum positional sequence diversity**, **minimum allele population frequency**, **minimum allele copy number**, and **minimum number of strains with an allele**. The default parameters for these filters are: 0.1, 0.1, 0.5 and 10, respectively. But the optimal value for the user may depend on the TEs being analyzed, the number of samples, and organism. 
 
 
 #### Output:
@@ -50,11 +50,15 @@ This module will return an S x N matrix for each TE, where S is the number of st
 
 ### 2) Implement hierarchical clustering:
 
-Once the allele copy number CSVs have been generated use the subfamilyInference.R module to implement the hierarchical clustering to infer clades and generate summary statistics of each clade. The cladeInference.Rmd notebook will run you through an example implentation using the test data in the repository. 
+Once the allele copy number CSVs have been generated use the subfamilyInference.R module to implement hierarchical clustering to infer clades and generate summary statistics of each clade. The cladeInference.Rmd notebook will run you through an example implentation using the test data in the repository. 
 
 #### Input:
-subfamilyInference.R requires an allele copy number CSV for each TE to infer clades as well as th aforementioned allele copy number numpy files to generate population level summary statistics. 
+subfamilyInference.R requires an **allele copy number CSV** for each TE to infer clades as well as the **allele copy number numpy** files to generate population level summary statistics. Also necessary is the **population sample sheet** and the **TE list**. You may require an alternate **allele copy number CSV** with individuals that are extreme **outliers** in TE copy number removed to perform initial inference, but this is optional. 
 
+#### Parameters:
+The user must input a **distance cut-off** for hierarchical clustering. The inference algorithm builds a correlation matrix and converts this matrix into a distance matrix by computing the dissimilarity distance (1 - correlation coefficient). Distance cut-off must therefore be in input as 1 minus the desired correlation cut-off. Determining the optimal distance cut-off is non-trivial and we recommend a procedure similar to one outlined in (link to paper) to determine a satisfactory cut-off. Ultimately, there is coarse-graining in this procedure and there will be no single parameter that optimally clusters alleles. There is
 
+#### Output:
+The subfamilyInference.R module will produce several outputs, both graphical and tabular:
 
-
+1. Firstly, you will receive a visualization of the seriated correlation **heatmap** for each TE showing the degree of correlation between pairwise combinations of alleles. Along with this is a **dendrogram**, visualizing the hierarchical clustering of the alleles. These are useful for qualitatively assessing clustering cut-off accuracy. The program will produce an additional seriated heatmap showing the copy number of each allele in each strain labelled by their respective populations. 
