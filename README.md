@@ -33,6 +33,8 @@ You also need a **TE list** of the designations for each TE you wish to analyze.
 
 ### 1) Generate copy number input:
 
+(NOTE: Future versions will optimize this process)
+
 First extract the minor alleles from the copy number numpy file to a CSVs by using the haploTE.py modules. An example of this implementation is described in cladeInference1.ipynb. 
 
 #### Input:
