@@ -1,1 +1,7 @@
 Directory containing the supplemental files as described in [publication name].
+
+S1 - Supplemental File 1: Clade inference summary statistics for the 41 recently active TEs.
+S2 - Supplemental File 2: Alignments of TE consensus sequences to 19 PacBio genomes.
+S3 - Supplemental File 3: Phylogenies/cladograms of TE sequences from PacBio genomes. Contains trees made from 75% complete sequences and 90% complete sequences.
+S4 - Supplemental File 4: Network graphs of the Jaccard Distance between SNPs of inferred clades derived from PacBio sequences.
+S5 - Supplemental File 5: Phylogeny, fasta sequences and associated data for clade inferences of simulated TE phylogenies.
