@@ -1,6 +1,6 @@
 # Manual:
 
-The included Python and R scripts are used to infer TE clades from copy number data as detailed in [publication]. Detailed Jupyter and Rmarkdown notebooks will walk you through implementing the modules, but this README will include brief overview of usage of the packages. 
+The included Python and R scripts are used to infer TE clades from copy number data as detailed in https://www.biorxiv.org/content/10.1101/2021.04.29.442051v1. Detailed Jupyter and Rmarkdown notebooks will walk you through implementing the modules, but this README will include brief overview of usage of the packages. 
 
 ## Necessary python libraries:
 pandas, numpy, os, seaborn, matplotlib, sys, scipy, scikit-learn, biopython, pysftp, datetime, statsmodels, functools, multiprocessing, pysam
@@ -65,4 +65,4 @@ The Subfamily_inference.R module will produce several outputs, both graphical an
 2. The tabular outputs you will receive are a .haplotypeTable.tsv and \_cluster_CN.tsv. The .haplotypeTable.tsv is a tab delimited file that contains all relevant summary statistics and copy number of each clade. Each row corresponds to a clade and has a unique Cluster_ID. The first few columns of the table will retain population level summary statistics, such as average population copy number and population frequency of each clade. Following an empty column the remaining columns contain the copy number of each clade in the individuals in the dataset. The \cluster_CN.tsv is a redundant table and is depreciated.
 
 
-Using the test data and the notebooks presented in this repository you will be able to reproduce our clade inferences from (link to publication). These modules are generalizable enough to be used in any population genomics data set.
+Using the test data and the notebooks presented in this repository you will be able to reproduce our clade inferences from (https://www.biorxiv.org/content/10.1101/2021.04.29.442051v1). These modules are generalizable enough to be used in any population genomics data set.
