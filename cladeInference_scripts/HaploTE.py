@@ -19,7 +19,8 @@ from sklearn.manifold import TSNE
 from statsmodels.stats.multitest import multipletests
 from functools import partial
 import pysam
-
+from itertools import combinations
+import time
 
 class dataCollection:
     """
@@ -36,11 +37,11 @@ class dataCollection:
         self.password = ''
         self.remote_path = ''
         self.local_path = ''
-        self.CN_path = '/Users/iskander/Documents/Barbash_lab/TE_diversity_data/B_CN'
-        self.SNP_path = '/Users/iskander/Documents/Barbash_lab/TE_diversity_data/SNP_files/RUN_11-15-19'
-        self.alleleCN_path = '/Users/iskander/Documents/Barbash_lab/TE_diversity_data/allele_CN/GDL_RUN-11-15-19'
-        self.active_tes = pd.read_csv('/Users/iskander/Documents/Barbash_lab/TE_diversity_data/ACTIVE_TES_internal.tsv',header=None).values[:, 0]
-        self.conTExt_path = '/Users/iskander/Documents/Barbash_lab/TE_diversity_data/INTERNAL_DELETIONS/cluster_tables/'
+        self.CN_path = '/B_CN'
+        self.SNP_path = '/SNP_files/RUN_11-15-19'
+        self.alleleCN_path = '/allele_CN/GDL_RUN-11-15-19'
+        self.active_tes = pd.read_csv('/ACTIVE_TES_internal.tsv', header=None).values[:, 0]
+        self.conTExt_path = '/INTERNAL_DELETIONS/cluster_tables/'
         self.sample_sheet = "/Users/iskander/Documents/Barbash_lab/TE_diversity_data/GDL_samples.tsv"
 
     def sftp(self, SNP=True):
@@ -98,7 +99,7 @@ class dataCollection:
             return TE_allele_CN
 
     def getLTR_CN(self):
-        LTR_index = np.load('/Users/iskander/Documents/Barbash_lab/TE_diversity_data/LTR_I.npy', allow_pickle=True)
+        LTR_index = np.load('/LTR_I.npy', allow_pickle=True)
         for row in LTR_index:
             interal_CN = np.load(os.path.join(self.CN_path, row[0]+'_CN.npy'))
             LTR_snps = np.load(os.path.join(self.SNP_path, row[1] + '_snps.npy'))
@@ -158,9 +159,9 @@ class summary_stats:
 
     """
     def __init__(self, sample_sheet='TEST_DATA/GDL_sample_sheet.csv'):
-        self.path = 'TEST_DATA/GDL_RUN-11-15-19/'
+        self.path = 'TE_CladeInference/cladeInference_scripts/TEST_DATA/GDL_RUN-11-15-19/'
         self.pi = 'TEST_DATA/Pi'
-        self.SNP_path= '/Users/iskander/Documents/Barbash_lab/TE_diversity_data/SNP_files/RUN_11-15-19/'
+        self.SNP_path= '/SNP_files/RUN_11-15-19/'
         self.strains = pd.read_csv(sample_sheet, header=None)
 
         pops = list(dict.fromkeys(self.strains[0]))
@@ -328,14 +329,14 @@ class subfamilyInference:
     """
     def __init__(self, TE_list='TEST_DATA/ACTIVE_TES_full.tsv', sample_sheet='TEST_DATA/GDL_sample_sheet.csv'):
         self.path = ""
-        self.div_path = 'TEST_DATA/Pi'
-        self.CN_path = 'TEST_DATA/GDL_RUN-11-15-19'
+        self.div_path = 'TE_CladeInference/cladeInference_scripts/TEST_DATA/Pi'
+        self.CN_path = 'TE_CladeInference/cladeInference_scripts/TEST_DATA/GDL_RUN-11-15-19'
         #self.active_tes = pd.read_csv(active_int,header=None).values[:, 0]
         self.active_fullLength = pd.read_csv(TE_list, header=None).values[:, 0]
-        self.CN_df_path = 'TEST_DATA/CN_tables/FULL'
-        self.AP_df_path = 'TEST_DATA/AP_tables'
+        self.CN_df_path = 'TE_CladeInference/cladeInference_scripts/TEST_DATA/CN_tables/FULL'
+        self.AP_df_path = 'TE_CladeInference/cladeInference_scripts/TEST_DATA/AP_tables'
         self.strains = pd.read_csv(sample_sheet, header=None)
-        self.SNP_path = "/Users/iskander/Documents/Barbash_lab/TE_diversity_data/SNP_files/RUN_11-15-19/"
+        self.SNP_path = "/SNP_files/RUN_11-15-19/"
         self.color_map = ['#6F0000','#009191','#6DB6FF','orange','#490092']
 
         #construct pop indexes:
@@ -607,7 +608,7 @@ class subfamilyInference:
         alleles = pd.read_csv(os.path.join(self.AP_df_path, f"{TE}.AP.GDL.minor.csv"))
 
         #read in sample sheet
-        sample_sheet = pd.read_csv("/Users/iskander/Documents/Barbash_lab/TE_diversity_data/GDL_samples.tsv", header=None)
+        sample_sheet = pd.read_csv("/GDL_samples.tsv", header=None)
         populations = [self.strain_hash[name[0]] for name in sample_sheet[0]]
 
         # on every strain within the GDL:
@@ -1081,15 +1082,15 @@ class subfamilyInference:
 
 class haplotypeAnalysis:
 
-    def __init__(self):
-        self.active_tes = pd.read_csv('/Users/iskander/Documents/Barbash_lab/TE_diversity_data/ACTIVE_TES_internal.tsv', header=None)
-        self.haplo_path='/Users/iskander/Documents/Barbash_lab/TE_diversity_data/HAPLOTYPE_CLUSTERS/HAPLOTYPE_CALL_07-17-2020'
-        self.haplo_stats_path = '/Users/iskander/Documents/Barbash_lab/TE_diversity_data/HAPLOTYPE_CLUSTERS/STATS/'
-        self.active_fullLength = pd.read_csv('/Users/iskander/Documents/Barbash_lab/TE_diversity_data/ACTIVE_TES_full.tsv', header=None)
-        self.CN_path = '/Users/iskander/Documents/Barbash_lab/TE_diversity_data/allele_CN/GDL_RUN-11-15-19'
+    def __init__(self, internal_path='/ACTIVE_TES_internal.tsv', full_length_path='/ACTIVE_TES_full.tsv'):
+        self.active_tes = pd.read_csv(internal_path, header=None)
+        self.haplo_path= '/HAPLOTYPE_CLUSTERS/HAPLOTYPE_CALL_07-17-2020'
+        self.haplo_stats_path = '/HAPLOTYPE_CLUSTERS/STATS/'
+        self.active_fullLength = pd.read_csv(full_length_path, header=None)
+        self.CN_path = '/allele_CN/GDL_RUN-11-15-19'
         self.color_map = ['#6F0000', '#009191', '#6DB6FF', 'orange', '#490092']
         self.NT_encode = {'A': 0, 'T': 1, 'C': 2, 'G': 3}
-        self.div_path = '/Users/iskander/Documents/Barbash_lab/TE_diversity_data/seq_diversity_numpys/RUN_1-27-20'
+        self.div_path = '/seq_diversity_numpys/RUN_1-27-20'
         self.pop_indexes = [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
                        [15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33],
                        [34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52],
@@ -1422,16 +1423,16 @@ class PacBio:
 
             self.active_tes = pd.read_csv(active_TE_path, header=None)
             self.PacBio_assemblies = ['A4', 'B3', 'A1', 'B1', 'A3', 'A6', 'A7', 'AB8', 'ORE', 'A2', 'A5', 'B4', 'B2', 'B6', "B59", "I23", "N25", "T29A", "ZH26"]
-            self.PacBio_path = '/Users/iskander/Documents/Barbash_lab/TE_diversity_data/PacBio/Alignments'
-            self.consensus_path = '/Users/iskander/Documents/Barbash_lab/TE_diversity_data/TE_consensus'
-            self.alignment_info_path = '/Users/iskander/Documents/Barbash_lab/TE_diversity_data/PacBio/TE_alignment_extract/'
-            self.variant_path = '/Users/iskander/Documents/Barbash_lab/TE_diversity_data/PacBio/Variants/'
-            self.haplo_path='/Users/iskander/Documents/Barbash_lab/TE_diversity_data/HAPLOTYPE_CLUSTERS/HAPLOTYPE_CALL_07-17-2020'
+            self.PacBio_path = '/PacBio/Alignments'
+            self.consensus_path = '/TE_consensus'
+            self.alignment_info_path = '/PacBio/TE_alignment_extract/'
+            self.variant_path = '/PacBio/Variants/'
+            self.haplo_path= '/HAPLOTYPE_CLUSTERS/HAPLOTYPE_CALL_07-17-2020'
             self.active_fullLength = pd.read_csv(full_length_path, header=None)
-            self.CN_df_Path = "/Users/iskander/Documents/Barbash_lab/TE_diversity_data/CN_dataframes/RUN_1-27-20/FULL/"
+            self.CN_df_Path = "/CN_dataframes/RUN_1-27-20/FULL/"
             self.PacBio_root = '/Users/iskander/Documents/Barbash_lab/TE_diversity_data/PacBio/'
             self.GDL = ["B59", "I23", "N25", "T29A", "ZH26"]
-            self.phylo_path = "/Users/iskander/Documents/Barbash_lab/TE_diversity_data/PacBio/Phylogeny"
+            self.phylo_path = "/PacBio/Phylogeny"
 
 
         def extract_Alignments(self, TE):
@@ -1669,6 +1670,11 @@ class PacBio:
                 plt.show()
                 plt.close()
 
+        def calcDivergence(self, pw_combos, variant_array):
+
+            seq_div = ((1 / variant_array.shape[0]) ** 2) * np.sum(variant_array[sq1] != variant_array[sq2]) / PacBio_variants[whole_elements][clade].shape[1]
+
+
         def PacBio_haplotype_corr(self, cluster, TE_pb, TE_haplo, AF_filter=0, GDL=False):
             """
 
@@ -1723,6 +1729,8 @@ class PacBio:
                 # Ask if there is more than one SNP called that passed criteria
                 haplotype_df = haplotype_df.iloc[whole_elements]
                 num_elements = haplotype_df.shape[0]
+                avg_len = np.average(np.sum( ~np.isnan(PacBio_variants[whole_elements]) , axis=1) / PacBio_variants.shape[1]) #the average length of the elements in the data used to get haplotype
+
 
                 #this parameter will remove any alleles where found in low copies. This will remove alleles that were perhaps low freq in the population that we only found in GDL but not in PacBio data
                 # I think that these alleles are inflating the 0s and in the case of correlations they actually return NaNs
@@ -1731,12 +1739,32 @@ class PacBio:
                 found_alleles = haplotype_df.columns[np.where(allele_count > AF_filter)]
                 haplotype_df = haplotype_df[found_alleles]
 
+
                 if haplotype_df.shape[1] > 1:
-                    #lost_SNPs = abs(len(SNPs) - haplotype_df.shape[1])
+
+                    # compute the largest distance between SNPs
+                    pos = [int(S.split("_")[1]) for S in haplotype_df.columns]
+                    max_dist = max(pos) - min(pos)
+
+                    lost_SNPs = abs(len(SNPs) - haplotype_df.shape[1])
 
                     #calculate the true positive rate of the inferred haplotypes in the PacBio data by directly taking the total number of true hits
                     #get the frequency of the haplotype in the dataset
-                    true_positive = np.sum((np.sum(haplotype_df.values, axis=1) == haplotype_df.shape[1])) / num_elements#/ np.sum(np.sum(haplotype_df.values, axis=1) > 0)
+                    true_positive = np.sum((np.sum(haplotype_df.values, axis=1) == haplotype_df.shape[1]))
+                    clade = np.sum(haplotype_df.values, axis=1) == haplotype_df.shape[1]
+
+                    #calculate length of insertions in clades
+                    clade_len = np.average(np.sum(~np.isnan(PacBio_variants[whole_elements][clade]), axis=1) / PacBio_variants.shape[1])
+                    #calculate the pairwise sequence diversity between sequences; can follow nei and li:
+                    pw_combinations = list(combinations(np.arange(0, PacBio_variants[whole_elements][clade].shape[0]), 2))
+                    calc_divergence = lambda sq1, sq2: ((1/PacBio_variants[whole_elements][clade].shape[0])**2 )*np.sum( PacBio_variants[whole_elements][clade][sq1] != PacBio_variants[whole_elements][clade][sq2] ) / PacBio_variants[whole_elements][clade].shape[1]
+                    diversity = 0
+
+                    for pw in pw_combinations:
+                        #start = time.perf_counter()
+                        diversity += calc_divergence(pw[0], pw[1])
+
+
 
                     #Calculate Jaccard Scores
                     score_matrix = self.calculate_Jaccard_score(haplotype_df)
@@ -1764,13 +1792,13 @@ class PacBio:
                     pw_PB_snps = PacBio_corr.values[triangle]
                     pw_SR_snps = haplo_corr.values[triangle]
 
-                    return avg_PBcorr, avg_SRcorr, avg_JS, num_snps, num_elements, pw_PB_snps, pw_SR_snps, jaccard_scores, true_positive
+                    return avg_PBcorr, avg_SRcorr, avg_JS, num_snps, num_elements, pw_PB_snps, pw_SR_snps, jaccard_scores, true_positive, avg_len, max_dist, clade_len, diversity
 
                 #SORRY THIS CODE IS GROSS BUT I AM LAZY
                 else: #when we have only 1 SNP called from our cluster in the PacBio data set we have to handle it and so we return these NaN values
-                    return np.nan, np.nan, np.nan, 1, 0, np.asarray([np.nan]), np.asarray([np.nan]), np.asarray([np.nan]), 0
+                    return np.nan, np.nan, np.nan, 1, 0, np.asarray([np.nan]), np.asarray([np.nan]), np.asarray([np.nan]), 0, 0, 0, np.nan, np.nan
             else:  # when we have only 1 SNP called from our cluster in the PacBio data set we have to handle it and so we return these NaN values
-                return np.nan, np.nan, np.nan, 1, 0, np.asarray([np.nan]), np.asarray([np.nan]), np.asarray([np.nan]), 0
+                return np.nan, np.nan, np.nan, 1, 0, np.asarray([np.nan]), np.asarray([np.nan]), np.asarray([np.nan]), 0, 0, 0, np.nan, np.nan
 
         def calculate_Jaccard_score(self, SNP_matrix):
             """
@@ -1814,6 +1842,10 @@ class PacBio:
             snp_ShortRead = []
             snp_Jaccard = []
             true_pos_list = []
+            element_length = []
+            dist = []
+            clade_length = []
+            clade_diversity = []
 
             for TE in range(self.active_fullLength.shape[0]):
                 TE_pb = self.active_tes[0][TE]
@@ -1822,7 +1854,7 @@ class PacBio:
 
                 #iterate through clusters
                 for cluster in haplotypeTable['Cluster ID']:
-                    PB_corr, HT_corr, jaccard_coeffs, num_SNPs, num_elements, pw_PB_snps, pw_SR_snps, pw_jaccard, true_pos = self.PacBio_haplotype_corr(TE_pb=TE_pb, TE_haplo=TE_haplo, cluster=cluster, AF_filter=AF, GDL=GDL)
+                    PB_corr, HT_corr, jaccard_coeffs, num_SNPs, num_elements, pw_PB_snps, pw_SR_snps, pw_jaccard, true_pos, length, max_dist, CL, pi = self.PacBio_haplotype_corr(TE_pb=TE_pb, TE_haplo=TE_haplo, cluster=cluster, AF_filter=AF, GDL=GDL)
 
                     #include all clusters now so we don't upwardly bias our validation
 
@@ -1837,13 +1869,19 @@ class PacBio:
                     snp_ShortRead.append(",".join(pw_SR_snps.astype(str)))
                     snp_Jaccard.append(",".join(pw_jaccard.astype(str)))
                     true_pos_list.append(true_pos)
-
+                    dist.append(max_dist)
+                    element_length.append(length)
+                    clade_length.append(CL)
+                    clade_diversity.append(pi)
+                    print(TE, cluster)
             assert len(TE_IDs) == len(PacBio_correlations)
 
             PacBio_df = pd.DataFrame(data={'TE':TE_IDs, 'PacBio Correlations': PacBio_correlations, 'Short-read Correlations':haplotype_correlations,
                                            "Jaccard Score": jaccard_coeff_vector, "PacBio Pairwise": snp_PacBio, "Short-read Pairwise": snp_ShortRead,
                                            "Jaccard Score Pairwise": snp_Jaccard, "True Positives": true_pos_list,
-                                           "Cluster Size": cluster_size, "Elements":elements, "Cluster ID":cluster_ids})
+                                           "Cluster Size": cluster_size, "Elements":elements, "Cluster ID":cluster_ids,
+                                           "SNP_distance":dist, "Element length":element_length, "Clade length":clade_length,
+                                           "Clade diversity":clade_diversity})
 
             return PacBio_df
 
@@ -2004,7 +2042,7 @@ class PacBio:
 
             #function to make violin/boxplots of all the cluster correlations
 
-            SIM_df = pd.read_csv("/Users/iskander/Documents/Barbash_lab/TE_diversity_data/PacBio/Simulations/SIM_01-27-2020_clusterTest.csv")
+            SIM_df = pd.read_csv("/PacBio/Simulations/SIM_01-27-2020_clusterTest.csv")
             GDL_df = pd.read_csv(os.path.join(self.PacBio_root, "GDL_clusterValidation.csv"))
             DSPR_GDL_df = pd.read_csv(os.path.join(self.PacBio_root, "GDL_clusterValidation.csv"))
 
@@ -2160,18 +2198,18 @@ class simulateHaplotypes:
         self.active_tes = pd.read_csv(active_TE_path, header=None)
         self.PacBio_assemblies = ['A4', 'B3', 'A1', 'B1', 'A3', 'A6', 'A7', 'AB8', 'ORE', 'A2', 'A5', 'B4', 'B2', 'B6',
                                   "B59", "I23", "N25", "T29A", "ZH26"]
-        self.PacBio_path = '/Users/iskander/Documents/Barbash_lab/TE_diversity_data/PacBio/Alignments'
-        self.alignment_info_path = '/Users/iskander/Documents/Barbash_lab/TE_diversity_data/PacBio/TE_alignment_extract/'
-        self.variant_path = '/Users/iskander/Documents/Barbash_lab/TE_diversity_data/PacBio/Variants/'
+        self.PacBio_path = '/PacBio/Alignments'
+        self.alignment_info_path = '/PacBio/TE_alignment_extract/'
+        self.variant_path = '/PacBio/Variants/'
         self.active_fullLength = pd.read_csv(full_length_path, header=None)
         self.PacBio_root = '/Users/iskander/Documents/Barbash_lab/TE_diversity_data/PacBio/'
-        self.reference_path = "/Users/iskander/Documents/Barbash_lab/TE_diversity_data/PacBio/Reference_variants"
-        self.haplo_path = "/Users/iskander/Documents/Barbash_lab/TE_diversity_data/HAPLOTYPE_CLUSTERS/HAPLOTYPE_CALL_SIM_01-22-2020/"
+        self.reference_path = "/PacBio/Reference_variants"
+        self.haplo_path = "/HAPLOTYPE_CLUSTERS/HAPLOTYPE_CALL_SIM_01-22-2020/"
         self.haplo_root = "/Users/iskander/Documents/Barbash_lab/TE_diversity_data/HAPLOTYPE_CLUSTERS/"
-        self.CN_df_Path = "/Users/iskander/Documents/Barbash_lab/TE_diversity_data/CN_dataframes/SIM_01-22-2020"
+        self.CN_df_Path = "/CN_dataframes/SIM_01-22-2020"
         self.dummy_path = active_TE_path
-        self.consensus_path = '/Users/iskander/Documents/Barbash_lab/TE_diversity_data/TE_consensus'
-        self.CN_path = '/Users/iskander/Documents/Barbash_lab/TE_diversity_data/allele_CN/GDL_RUN-11-15-19'
+        self.consensus_path = '/TE_consensus'
+        self.CN_path = '/allele_CN/GDL_RUN-11-15-19'
 
     def reference_pileups(self, TE):
 
@@ -2296,13 +2334,11 @@ class simulateHaplotypes:
         for strain in range(AP.shape[0]): #Get the allele CN per position given our library
             strain_alleleCN = AP[strain] * est_CN[strain]
             alleleCN[strain] = strain_alleleCN
-        #An additional feature could be to draw copies, or reads from a multiN distribution with the parameters of AP matrix
-        #That would create a bit more randomness to simulation, but I don't think it is a critical feature
+
 
         return alleleCN
 
-    def sampleTEs_from_Phylo(self, fasta, copy_number, strains, target_coverage=12.5, erorr_rate=0.001):
-
+    def genNumpy(self, fasta):
         headers = []
         fasta_seqs = []
         nt_dict = {"a":0, "t":1, "c":2, "g":3}
@@ -2315,7 +2351,13 @@ class simulateHaplotypes:
         fasta_seqs = np.asarray(fasta_seqs)
         fasta_np = np.apply_along_axis(func1d=DNA_to_num, arr=fasta_seqs, axis=1)
 
-        poissCN = np.random.poisson(copy_number, strains)
+        return fasta_np
+
+    def sampleTEs_from_Phylo(self, fasta, copy_number, strains, target_coverage=12.5, erorr_rate=0.001):
+
+        fasta_np = self.genNumpy(fasta)
+
+        poissCN = np.random.poisson(copy_number, strains) #total number of copies to sample
         trueCN = poissCN + poissCN*(erorr_rate*4) #add in psuedocounts for error rate
 
         sample_sheet = {"Headers": [], "Strains": []}
@@ -2334,7 +2376,6 @@ class simulateHaplotypes:
                 reorder_val = np.concatenate((reorder_val, TEs))
             else:
                 reorder_val = TEs
-            #TE_index = np.asarray(list(set(TE_index) - set(TEs)))
 
             TE_strain_matrix = fasta_np[TEs]
 
@@ -2413,31 +2454,31 @@ class piRNA:
 
     def __init__(self, active_te_path='/Users/iskander/Documents/Barbash_lab/TE_diversity_data/ACTIVE_TES_internal.tsv', active_full_path='/Users/iskander/Documents/Barbash_lab/TE_diversity_data/ACTIVE_TES_full.tsv'):
         self.active_tes = pd.read_csv(active_te_path, header=None)
-        self.haplo_path='/Users/iskander/Documents/Barbash_lab/TE_diversity_data/HAPLOTYPE_CLUSTERS/HAPLOTYPE_CALL_07-17-2020'
-        self.haplo_stats_path = '/Users/iskander/Documents/Barbash_lab/TE_diversity_data/HAPLOTYPE_CLUSTERS/STATS/'
+        self.haplo_path= '/HAPLOTYPE_CLUSTERS/HAPLOTYPE_CALL_07-17-2020'
+        self.haplo_stats_path = '/HAPLOTYPE_CLUSTERS/STATS/'
         self.active_fullLength = pd.read_csv(active_full_path, header=None)
-        self.CN_path = '/Users/iskander/Documents/Barbash_lab/TE_diversity_data/allele_CN/GDL_RUN-11-15-19'
+        self.CN_path = '/allele_CN/GDL_RUN-11-15-19'
         self.color_map = ['#6F0000', '#009191', '#6DB6FF', 'orange', '#490092']
         self.NT_encode = {'A': 0, 'T': 1, 'C': 2, 'G': 3}
-        self.div_path = 'TEST_DATA/Pi'
+        self.div_path = 'TE_CladeInference/cladeInference_scripts/TEST_DATA/Pi'
         self.pop_indexes = [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
                        [15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33],
                        [34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52],
                        [53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70],
                        [71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84]]
-        self.piRNA_path = "/Users/iskander/Documents/Barbash_lab/TE_diversity_data/piRNA"
+        self.piRNA_path = "/piRNA"
         self.piRNA_strains = ['B10.pckl','B12.pckl', 'I06.pckl', 'I17.pckl','ISO-1.pckl','Misy.pckl','N10.pckl',
                               'N16.pckl', 'Paris.pckl', 'RAL313.pckl', 'RAL358.pckl', 'RAL362.pckl', 'RAL375.pckl',
                               'RAL379.pckl', 'RAL380.pckl', 'RAL391.pckl', 'RAL399.pckl', 'RAL427.pckl', 'RAL437.pckl',
                               'RAL555.pckl', 'RAL705.pckl', 'RAL707.pckl', 'RAL712.pckl', 'RAL714.pckl', 'RAL732.pckl',
                               'T05.pckl', 'T07.pckl', 'ZW155.pckl', 'ZW184.pckl']
         self.GDL = ['B10.pckl','B12.pckl', 'I06.pckl', 'I17.pckl','N10.pckl', 'N16.pckl', 'T05.pckl', 'T07.pckl', 'ZW155.pckl', 'ZW184.pckl']
-        self.consensus_path = '/Users/iskander/Documents/Barbash_lab/TE_diversity_data/TE_consensus'
+        self.consensus_path = '/TE_consensus'
         self.pirna_plotDir = "/Users/iskander/Documents/Barbash_lab/TE_diversity_data/piRNA/plots"
-        self.pingPong_dir = "/Users/iskander/Documents/Barbash_lab/TE_diversity_data/piRNA/pingpong_output/"
-        self.bam_dir = "/Users/iskander/Documents/Barbash_lab/TE_diversity_data/piRNA/BAM_files/"
-        self.pileup_dir = "/Users/iskander/Documents/Barbash_lab/TE_diversity_data/piRNA/read_pileups"
-        self.pi_path = "/Users/iskander/Documents/Barbash_lab/TE_diversity_data/seq_diversity_numpys/RUN_1-27-20/"
+        self.pingPong_dir = "/piRNA/pingpong_output/"
+        self.bam_dir = "/piRNA/BAM_files/"
+        self.pileup_dir = "/piRNA/read_pileups"
+        self.pi_path = "/seq_diversity_numpys/RUN_1-27-20/"
 
 
 
@@ -2884,7 +2925,7 @@ class piRNA:
 
         #####
         piRNA_df = pd.DataFrame(data={"+": sense_haplo, "-": antisense_haplo,
-                                      "Population/strain": pd.read_csv("/Users/iskander/Documents/Barbash_lab/TE_diversity_data/piRNA/piRNA.samplesheet.csv", header=None)[1],
+                                      "Population/strain": pd.read_csv("/piRNA/piRNA.samplesheet.csv", header=None)[1],
                                       "Haplotype":[cluster for t in range(29)]})
         if plot == True:
             with sns.axes_style("whitegrid"):
