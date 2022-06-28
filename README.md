@@ -1,6 +1,6 @@
 # Manual:
 
-The included Python and R scripts are used to infer TE clades from copy number data as detailed in https://www.biorxiv.org/content/10.1101/2021.04.29.442051v1. Detailed Jupyter and Rmarkdown notebooks will walk you through implementing the modules, but this README will include brief overview of usage of the packages. 
+The included Python and R scripts are used to infer TE clades from copy number data as detailed in https://doi.org/10.1093/molbev/msab336. Detailed Jupyter and Rmarkdown notebooks will walk you through implementing the modules, but this README will include brief overview of usage of the packages. 
 
 ## Necessary python libraries:
 pandas, numpy, os, seaborn, matplotlib, sys, scipy, scikit-learn, biopython, pysftp, datetime, statsmodels, functools, multiprocessing, pysam
