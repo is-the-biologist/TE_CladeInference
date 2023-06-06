@@ -3,10 +3,10 @@
 The included Python and R scripts are used to infer TE clades from copy number data as detailed in https://doi.org/10.1093/molbev/msab336. Detailed Jupyter and Rmarkdown notebooks will walk you through implementing the modules, but this README will include brief overview of usage of the packages. 
 
 ## Necessary python libraries:
-pandas, numpy, os, seaborn, matplotlib, sys, scipy, scikit-learn, biopython, pysftp, datetime, statsmodels, functools, multiprocessing, pysam
+    pandas, numpy, os, seaborn, matplotlib, sys, scipy, scikit-learn, biopython, pysftp, datetime, statsmodels, functools, multiprocessing, pysam
 
 ## Necessary R libraries:
-pheatmap, plyr, ggplot2, ggdendro, matrixStats, RColorBrewer, reticulate, viridis, igraph, Polychrome
+    pheatmap, plyr, ggplot2, ggdendro, matrixStats, RColorBrewer, reticulate, viridis, igraph, Polychrome
 
 ## Test data:
 Test data in this repository is derived from 85 D. melanogaster genomes from the Global Diversity Lines (https://www.g3journal.org/content/5/4/593). These data have been used to infer clades in 41 recently active TEs, and the notebooks included in this repository will allow the user to reproduce clade inferences from (https://www.biorxiv.org/content/10.1101/2021.04.29.442051v1). 
