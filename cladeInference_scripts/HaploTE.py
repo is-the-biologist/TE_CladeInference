@@ -9,12 +9,18 @@ from sklearn.decomposition import PCA
 from sklearn.linear_model import LinearRegression
 from Bio import SeqIO
 from Bio.Blast import NCBIXML
-import pysftp
+try:
+    import pysftp
+except ImportError:
+    pysftp = None
 from scipy.spatial.distance import pdist
 from multiprocessing import Pool
 from sklearn.metrics import jaccard_score
 from datetime import date
-from Bio.Align.Applications import ClustalOmegaCommandline
+try:
+    from Bio.Align.Applications import ClustalOmegaCommandline
+except (ImportError, ModuleNotFoundError):
+    ClustalOmegaCommandline = None
 from sklearn.manifold import TSNE
 from statsmodels.stats.multitest import multipletests
 from functools import partial
@@ -158,9 +164,9 @@ class summary_stats:
     Class module to contain the methods to calculate relevant summary statistics for alleles, Pi and Dispersion.
 
     """
-    def __init__(self, sample_sheet='TEST_DATA/GDL_sample_sheet.csv'):
-        self.path = 'TE_CladeInference/cladeInference_scripts/TEST_DATA/GDL_RUN-11-15-19/'
-        self.pi = 'TEST_DATA/Pi'
+    def __init__(self, sample_sheet='TEST_DATA/GDL_sample_sheet.csv', cn_dir='TE_CladeInference/cladeInference_scripts/TEST_DATA/GDL_RUN-11-15-19/', pi_dir='TEST_DATA/Pi'):
+        self.path = cn_dir
+        self.pi = pi_dir
         self.SNP_path= '/SNP_files/RUN_11-15-19/'
         self.strains = pd.read_csv(sample_sheet, header=None)
 
@@ -327,14 +333,18 @@ class subfamilyInference:
 
 
     """
-    def __init__(self, TE_list='TEST_DATA/ACTIVE_TES_full.tsv', sample_sheet='TEST_DATA/GDL_sample_sheet.csv'):
+    def __init__(self, TE_list='TEST_DATA/ACTIVE_TES_full.tsv', sample_sheet='TEST_DATA/GDL_sample_sheet.csv',
+                 cn_dir='TE_CladeInference/cladeInference_scripts/TEST_DATA/GDL_RUN-11-15-19',
+                 pi_dir='TE_CladeInference/cladeInference_scripts/TEST_DATA/Pi',
+                 cn_df_path='TE_CladeInference/cladeInference_scripts/TEST_DATA/CN_tables/FULL',
+                 ap_df_path='TE_CladeInference/cladeInference_scripts/TEST_DATA/AP_tables'):
         self.path = ""
-        self.div_path = 'TE_CladeInference/cladeInference_scripts/TEST_DATA/Pi'
-        self.CN_path = 'TE_CladeInference/cladeInference_scripts/TEST_DATA/GDL_RUN-11-15-19'
+        self.div_path = pi_dir
+        self.CN_path = cn_dir
         #self.active_tes = pd.read_csv(active_int,header=None).values[:, 0]
         self.active_fullLength = pd.read_csv(TE_list, header=None).values[:, 0]
-        self.CN_df_path = 'TE_CladeInference/cladeInference_scripts/TEST_DATA/CN_tables/FULL'
-        self.AP_df_path = 'TE_CladeInference/cladeInference_scripts/TEST_DATA/AP_tables'
+        self.CN_df_path = cn_df_path
+        self.AP_df_path = ap_df_path
         self.strains = pd.read_csv(sample_sheet, header=None)
         self.SNP_path = "/SNP_files/RUN_11-15-19/"
         self.color_map = ['#6F0000','#009191','#6DB6FF','orange','#490092']

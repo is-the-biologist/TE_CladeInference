@@ -38,7 +38,7 @@ construct_linkage <- function(df, linkage, TE_name, names=FALSE, fontsize=8){
   
 }
 
-draw_heatmaps<-function(df, outlier_df, TE_name, dendrogram, names=FALSE, fontsize=10, sample="/Users/iskander/Documents/Barbash_lab/TE_diversity_data/GDL_sample_sheet.csv", color_pal) {
+draw_heatmaps<-function(df, outlier_df, TE_name, dendrogram, names=FALSE, fontsize=10, sample, color_pal) {
   
   #This function will draw out the final heatmaps that use the dendrogram that we constructed in the get linkage function
   cmat <- cor(outlier_df) #get the correlation matrix
@@ -109,7 +109,7 @@ cut_dendrogram <- function(len, dendrogram, labs=TRUE, fontsize=5){
   
 }
 
-cluster_CN <- function(labels, CN_df, sample='/Users/iskander/Documents/Barbash_lab/TE_diversity_data/GDL_sample_sheet.csv', minSize=T){
+cluster_CN <- function(labels, CN_df, sample, minSize=T){
   
   #This function will take in our cluster labels from our dendogram trimming function and then will output two data frames one is the the average copy number of each haplotype and the other is a key that will tell us what combination of alleles make up each haplotype. 
   
@@ -201,7 +201,7 @@ cluster_CN <- function(labels, CN_df, sample='/Users/iskander/Documents/Barbash_
   return(list(mean_CN.df, cluster_ID.df, var_CN.df))
 }
 
-getHaploclusterStats <- function(copyNumber, cluster_labels, TE, global_name="GDL", CN_dir='/Users/iskander/Documents/Barbash_lab/TE_diversity_data/allele_CN/GDL_RUN-11-15-19', sample='/Users/iskander/Documents/Barbash_lab/TE_diversity_data/GDL_sample_sheet.csv'){
+getHaploclusterStats <- function(copyNumber, cluster_labels, TE, global_name="GDL", CN_dir, sample){
   
   #Function to compute some relevant summary statistics 
   
@@ -297,7 +297,7 @@ getHaploclusterStats <- function(copyNumber, cluster_labels, TE, global_name="GD
   return(stat_table)
 }
 
-formatTable <- function(CN, clabels, stats_table, sample = '/Users/iskander/Documents/Barbash_lab/TE_diversity_data/GDL_sample_sheet.csv'){
+formatTable <- function(CN, clabels, stats_table, sample){
   
   #This function is just going to take the tables that I produced and unite them into one larger table with relevant summary statistics
   #nRows = Cluster length
@@ -369,7 +369,7 @@ read_TE_tables<-function(TE_file){
 }
 
 extractHaplotypes <- function(TE_name, outlier=FALSE, outlier_dir, output_dir, linkage= 'average', minSize = T, dist_cutoff=0.5, hmap_labels=FALSE, dendro_labels=FALSE, plots=TRUE, color_pal=c('#6F0000','#009191','#6DB6FF','orange','#490092'),
-                              alleleCN_dir="/Users/iskander/Documents/Barbash_lab/TE_diversity_data/allele_CN/GDL_RUN-11-15-19", sample="/Users/iskander/Documents/Barbash_lab/TE_diversity_data/GDL_sample_sheet.csv"){
+                              alleleCN_dir, sample){
   #Function to wrap our analyses into one and then save all of the files into csvs, plots as needed
   TE_desig <- strsplit(basename(TE_name), '\\.')[[1]][1]
   
