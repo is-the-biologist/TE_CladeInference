@@ -1,0 +1,36 @@
+name: te_clade
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  # Python
+  - python>=3.9,<3.12
+  - numpy
+  - pandas
+  - scipy
+  - scikit-learn
+  - matplotlib
+  - seaborn
+  - statsmodels
+  - biopython
+  - pysam
+  - paramiko<4
+  - pysftp
+  - pytest
+  # R core
+  - r-base>=4.1
+  - r-pheatmap
+  - r-plyr
+  - r-ggplot2
+  - r-ggdendro
+  - r-matrixstats
+  - r-rcolorbrewer
+  - r-reticulate
+  - r-viridis
+  - r-igraph
+  - r-assertthat
+  # R packages not on conda-forge — installed via R's install.packages()
+  - r-scatterplot3d
+  # Polychrome must be installed from CRAN after env creation:
+  #   Rscript -e "install.packages('Polychrome', repos='https://cloud.r-project.org')"
